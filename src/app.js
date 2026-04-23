@@ -1,7 +1,6 @@
 import express from 'express'
 import cors from 'cors'
-import usuariosRoutes from './modules/usuarios/routes/usuarios.routes.js'
-
+import routes from './routes/index.js'
 
 const app = express()
 
@@ -11,6 +10,13 @@ app.use(express.json())
 app.get('/', (req, res) => {
     res.send('API rodando 🚀')
 })
-app.use('/usuarios', usuariosRoutes)
+
+app.use(routes)
+
+app.use((err, req, res, next) => {
+    console.error(err.stack)
+    res.status(500).json({ erro: 'Erro interno do servidor' })
+})
 
 export default app
+
