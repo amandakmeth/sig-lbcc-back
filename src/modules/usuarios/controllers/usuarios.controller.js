@@ -33,13 +33,13 @@ export const getUsuarioById = async (req, res) => {
 
 //CRIAR
 export const createUsuario = async (req, res) => {
-    const { nome, email, perfil } = req.body
+    const { nome, email, perfil, senha } = req.body
 
-    if (!nome || !email) {
-        return res.status(400).json({ erro: 'Nome e email são obrigatórios' })
+    if (!nome || !email || !senha) {
+        return res.status(400).json({ erro: 'Nome, email e senha são obrigatórios' })
     }
 
-    const { data, error } = await inserirUsuario({ nome, email, perfil })
+    const { data, error } = await inserirUsuario({ nome, email, perfil, senha })
 
     if (error) {
         console.error(error)
