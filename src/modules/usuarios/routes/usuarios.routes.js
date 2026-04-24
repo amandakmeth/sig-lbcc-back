@@ -6,8 +6,11 @@ import {
     updateUsuario,
     deleteUsuario
 } from '../controllers/usuarios.controller.js'
+import { authMiddleware } from '../../auth/middlewares/auth.middleware.js'
 
 const router = express.Router()
+
+router.use(authMiddleware)
 
 router.get('/', getUsuarios)
 router.get('/:id', getUsuarioById)
