@@ -52,23 +52,34 @@ export const login = async (req, res) => {
 
         // validação básica
         if (!email || !password) {
-        return res.status(400).json({ erro: 'Email e senha são obrigatórios' })
+            return res.status(400).json({ erro: 'Email e senha são obrigatórios' })
         }
 
         // login no Supabase
         const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
+            email,
+            password
         })
 
         if (error) {
-        return res.status(401).json({ erro: 'Credenciais inválidas' })
+            return res.status(401).json({ erro: 'Credenciais inválidas' })
         }
 
-        // retorna token + dados do usuário
+        // busca o usuário na tabela do sistema
+        const { data: usuario, error: userError } = await supabase
+            .from('usuarios')
+            .select('*')
+            .eq('id', data.user.id)
+            .single()
+
+        if (userError || !usuario) {
+            return res.status(401).json({ erro: 'Usuário não encontrado' })
+        }
+
+        // retorna token + usuário do sistema
         return res.json({
-        access_token: data.session.access_token,
-        user: data.user
+            access_token: data.session.access_token,
+            user: usuario
         })
 
     } catch (err) {
