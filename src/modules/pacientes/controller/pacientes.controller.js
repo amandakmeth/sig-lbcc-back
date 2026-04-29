@@ -6,10 +6,7 @@ import {
     desativarPaciente
 } from '../service/pacientes.service.js'
 
-// =========================
-// LISTAR PACIENTES
-// =========================
-export const getPacientes = async (req, res) => {
+getPacientes = async (req, res) => {
     try {
         const { data, error } = await listarPacientes()
 
@@ -23,9 +20,7 @@ export const getPacientes = async (req, res) => {
     }
 }
 
-// =========================
-// BUSCAR POR ID
-// =========================
+
 export const getPacienteById = async (req, res) => {
     try {
         const { id } = req.params
