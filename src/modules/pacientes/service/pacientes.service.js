@@ -42,7 +42,8 @@ export const inserirPaciente = async (dados) => {
     const { data, error } = await supabase
         .from('pacientes')
         .insert([dados])
-        .select()
+        .select('id')
+        .single()
 
     return { data, error }
 }
