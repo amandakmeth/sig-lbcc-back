@@ -14,7 +14,7 @@ export const authMiddleware = async (req, res, next) => {
 
         const token = authHeader.split(' ')[1]
 
-        // 🔐 valida token no Supabase
+        //valida token no Supabase
         const { data, error } = await supabase.auth.getUser(token)
 
         if (error || !data.user) {
@@ -22,7 +22,7 @@ export const authMiddleware = async (req, res, next) => {
         return res.status(401).json({ erro: 'Token inválido' })
         }
 
-        // 🔎 busca usuário na tabela do sistema
+        //busca usuário na tabela do sistema
         const { data: usuario, error: userError } = await supabase
         .from('usuarios')
         .select('*')
@@ -33,7 +33,7 @@ export const authMiddleware = async (req, res, next) => {
         return res.status(401).json({ erro: 'Usuário não encontrado' })
         }
 
-        // injeta no request
+        //injeta no request
         req.user = usuario
 
         next()

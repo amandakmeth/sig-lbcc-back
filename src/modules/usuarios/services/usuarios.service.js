@@ -22,14 +22,14 @@ export const buscarUsuarioPorId = async (id) => {
 }
 
 // =========================
-// CRIAR USUÁRIO (SEGURO + DEBUG)
+// CRIAR USUÁRIO
 // =========================
 export const inserirUsuario = async ({ nome, email, perfil, senha }) => {
 
     //console.log("INICIANDO CRIAÇÃO DE USUÁRIO:", email)
     //console.log("FUNÇÃO INSERIR USUÁRIO EXECUTOU")
 
-    // 1. VERIFICA SE JÁ EXISTE NA TABELA
+    //VERIFICA SE JÁ EXISTE NA TABELA
     const { data: existeTabela } = await supabase
         .from('usuarios')
         .select('id')
@@ -40,7 +40,7 @@ export const inserirUsuario = async ({ nome, email, perfil, senha }) => {
         return { error: 'Usuário já existe no sistema (tabela)' }
     }
 
-    // 2. CRIA NO AUTH
+    //CRIA NO AUTH
     const { data: authData, error: authError } =
         await supabaseAdmin.auth.admin.createUser({
             email,

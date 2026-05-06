@@ -25,7 +25,7 @@ export const buscarDocumentoPorId = async (id) => {
 }
 
 // =========================
-// 📤 UPLOAD ARQUIVO PARA STORAGE (CORRIGIDO)
+// UPLOAD ARQUIVO PARA STORAGE
 // =========================
 export const uploadArquivo = async (file, paciente_id) => {
     try {
@@ -66,7 +66,7 @@ export const inserirDocumento = async ({
     created_by
 }) => {
 
-    // 🔎 valida paciente
+    //valida paciente
     const { data: paciente, error: pacienteError } =
         await buscarPacientePorId(paciente_id)
 
