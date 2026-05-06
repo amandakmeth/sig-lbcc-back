@@ -11,7 +11,7 @@ import { authMiddleware } from '../../auth/middlewares/auth.middleware.js'
 
 const router = express.Router()
 
-// 🔒 rotas protegidas
+//rotas protegidas
 router.use(authMiddleware)
 
 /**

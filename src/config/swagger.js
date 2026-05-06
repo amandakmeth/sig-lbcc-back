@@ -24,7 +24,7 @@ const options = {
         }
     },
 
-    apis: ['./src/modules/**/*.js'] // 🔥 lê suas rotas automaticamente
+    apis: ['./src/modules/**/*.js']
 }
 
 const swaggerSpec = swaggerJsdoc(options)
