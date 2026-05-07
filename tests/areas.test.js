@@ -90,20 +90,20 @@ describe('Áreas - Regras de Negócio', () => {
         expect(res.statusCode).toBe(403)
     })
 
-    it('gestor deve desativar área', async () => {
-        const res = await request(app)
-            .delete(`/areas/${areaId}`)
-            .set('Authorization', `Bearer ${tokenGestor}`)
-
-        expect(res.statusCode).toBe(200)
-    })
-
-    it('operador NÃO pode desativar área', async () => {
+    it('operador NÃO pode excluir área', async () => {
         const res = await request(app)
             .delete(`/areas/${areaId}`)
             .set('Authorization', `Bearer ${tokenOperador}`)
 
         expect(res.statusCode).toBe(403)
+    })
+
+    it('gestor deve excluir área', async () => {
+        const res = await request(app)
+            .delete(`/areas/${areaId}`)
+            .set('Authorization', `Bearer ${tokenGestor}`)
+
+        expect(res.statusCode).toBe(200)
     })
 
     it('não deve acessar sem token', async () => {

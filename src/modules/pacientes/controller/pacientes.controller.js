@@ -6,7 +6,7 @@ import {
     desativarPaciente
 } from '../service/pacientes.service.js'
 
-getPacientes = async (req, res) => {
+export const getPacientes = async (req, res) => {
     try {
         const { data, error } = await listarPacientes()
 

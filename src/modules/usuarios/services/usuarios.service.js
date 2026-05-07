@@ -8,6 +8,7 @@ export const listarUsuarios = async () => {
     return await supabase
         .from('usuarios')
         .select('id, nome, email, perfil, ativo, created_at')
+        .order('nome', { ascending: true })
 }
 
 // =========================
