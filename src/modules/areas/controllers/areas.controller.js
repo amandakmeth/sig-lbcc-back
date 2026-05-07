@@ -2,9 +2,9 @@ import {
     listarAreas,
     buscarAreaPorId,
     inserirArea,
-    atualizarArea,
-    desativarArea
+    atualizarArea
 } from '../services/areas.service.js'
+import supabase from '../../../config/supabase.js'
 
 // =========================
 // LISTAR ÁREAS
@@ -93,24 +93,51 @@ export const updateArea = async (req, res) => {
 }
 
 // =========================
-// DESATIVAR ÁREA
+// EXCLUIR ÁREA
 // =========================
 export const deleteArea = async (req, res) => {
     try {
+
         if (req.user.perfil !== 'gestor') {
-            return res.status(403).json({ erro: 'Apenas gestor pode desativar áreas' })
+            return res.status(403).json({
+                erro: 'Apenas gestor pode excluir áreas'
+            })
         }
 
         const { id } = req.params
 
-        const { error } = await desativarArea(id)
+        // verificar vínculos
+        const { data: usuarios } = await supabase
+            .from('usuarios')
+            .select('id')
+            .eq('area_id', id)
+            .limit(1)
 
-        if (error) {
-            return res.status(500).json({ erro: error.message })
+        if (usuarios && usuarios.length > 0) {
+            return res.status(400).json({
+                erro: 'Área possui usuários vinculados'
+            })
         }
 
-        return res.status(200).json({ message: 'Área desativada' })
+        // exclusão física
+        const { error } = await supabase
+            .from('areas')
+            .delete()
+            .eq('id', id)
+
+        if (error) {
+            return res.status(500).json({
+                erro: error.message
+            })
+        }
+
+        return res.status(200).json({
+            message: 'Área excluída com sucesso'
+        })
+
     } catch (err) {
-        return res.status(500).json({ erro: 'Erro ao desativar área' })
+        return res.status(500).json({
+            erro: 'Erro ao excluir área'
+        })
     }
 }
