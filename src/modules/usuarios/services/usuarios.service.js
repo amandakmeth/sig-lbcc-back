@@ -128,15 +128,27 @@ export const atualizarUsuario = async (id, dados) => {
 // =========================
 // ATIVAR / INATIVAR USUÁRIO
 // =========================
-export const alterarStatusUsuario = async (
-    id,
-    ativo
-) => {
+export const alterarStatusUsuario = async (id) => {
 
+    // 1. buscar usuário atual
+    const { data: usuario, error: errorFind } = await supabase
+        .from('usuarios')
+        .select('ativo')
+        .eq('id', id)
+        .single()
+
+    if (errorFind) {
+        return { data: null, error: errorFind }
+    }
+
+    // 2. inverter status
+    const novoStatus = !usuario.ativo
+
+    // 3. atualizar no banco
     const { data, error } = await supabase
         .from('usuarios')
         .update({
-            ativo,
+            ativo: novoStatus,
             updated_at: new Date()
         })
         .eq('id', id)
