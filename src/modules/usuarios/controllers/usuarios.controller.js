@@ -47,22 +47,29 @@ export const getUsuarioById = async (req, res) => {
 //CRIAR
 export const createUsuario = async (req, res) => {
     if (req.user.perfil !== 'gestor') {
-        return res.status(403).json({ erro: 'Apenas gestor pode criar usuários' })
+        return res.status(403).json({
+            erro: 'Apenas gestor pode criar usuários'
+        })
     }
 
     const { nome, email, perfil, senha } = req.body
 
     if (!nome || !email || !senha) {
-        return res.status(400).json({ erro: 'Nome, email e senha são obrigatórios' })
+        return res.status(400).json({
+            erro: 'Nome, email e senha são obrigatórios'
+        })
     }
 
-    const { data, error } = await inserirUsuario({ nome, email, perfil, senha })
+    const { data, error } =
+        await inserirUsuario({ nome, email, perfil, senha })
 
     if (error) {
-        return res.status(500).json({ erro: error.message })
+        return res.status(400).json({
+            erro: error?.message || error
+        })
     }
 
-    res.status(201).json(data)
+    return res.status(201).json(data)
 }
 
 //ATUALIZAR
@@ -91,7 +98,7 @@ export const updateUsuario = async (req, res) => {
 //DELETAR
 export const deleteUsuario = async (req, res) => {
     if (req.user.perfil !== 'gestor') {
-        return res.status(403).json({ erro: 'Apenas gestor pode excluir' })
+        return res.status(403).json({ erro: 'Apenas gestor pode desativar usuários' })
     }
 
     const { id } = req.params
@@ -104,5 +111,5 @@ export const deleteUsuario = async (req, res) => {
         })
     }
 
-    return res.status(200).json({ message: 'Usuário deletado' })
+    return res.status(200).json({ message: 'Usuário desativado' })
 }

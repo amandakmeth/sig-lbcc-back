@@ -7,7 +7,7 @@ export const listarPacientes = async () => {
     return await supabase
         .from('pacientes')
         .select('*')
-        .order('created_at', { ascending: false })
+        .order('nome', { ascending: true })
 }
 
 // =========================
@@ -55,6 +55,25 @@ export const atualizarPaciente = async (id, dados) => {
 
     if (!dados || Object.keys(dados).length === 0) {
         return { error: { message: 'Nenhum dado informado para atualização' } }
+    }
+
+    // valida CPF duplicado
+    if (dados.cpf) {
+
+        const { data: existe } = await supabase
+            .from('pacientes')
+            .select('id')
+            .eq('cpf', dados.cpf)
+            .neq('id', id)
+            .maybeSingle()
+
+        if (existe) {
+            return {
+                error: {
+                    message: 'CPF já cadastrado para outro paciente'
+                }
+            }
+        }
     }
 
     const { data, error } = await supabase

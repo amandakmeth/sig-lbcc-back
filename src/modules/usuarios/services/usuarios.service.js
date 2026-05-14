@@ -27,10 +27,7 @@ export const buscarUsuarioPorId = async (id) => {
 // =========================
 export const inserirUsuario = async ({ nome, email, perfil, senha }) => {
 
-    //console.log("INICIANDO CRIAÇÃO DE USUÁRIO:", email)
-    //console.log("FUNÇÃO INSERIR USUÁRIO EXECUTOU")
-
-    //VERIFICA SE JÁ EXISTE NA TABELA
+    // VERIFICA SE JÁ EXISTE
     const { data: existeTabela } = await supabase
         .from('usuarios')
         .select('id')
@@ -38,10 +35,14 @@ export const inserirUsuario = async ({ nome, email, perfil, senha }) => {
         .maybeSingle()
 
     if (existeTabela) {
-        return { error: 'Usuário já existe no sistema (tabela)' }
+    return {
+        error: {
+            message: 'Já existe um usuário cadastrado com este e-mail'
+        }
     }
+}
 
-    //CRIA NO AUTH
+    // CRIA NO AUTH
     const { data: authData, error: authError } =
         await supabaseAdmin.auth.admin.createUser({
             email,
@@ -50,17 +51,12 @@ export const inserirUsuario = async ({ nome, email, perfil, senha }) => {
         })
 
     if (authError || !authData?.user) {
-        //console.log("ERRO AUTH:", authError)
         return { error: authError || 'Erro ao criar usuário no Auth' }
     }
 
     const id = authData.user.id
 
-    //console.log("USUÁRIO CRIADO NO AUTH:", id)
-    //console.log("VOU INSERIR NA TABELA USUARIOS")
-    //console.log("ID:", id)
-    //console.log("EMAIL:", email)
-
+    // INSERE NA TABELA
     const { data, error } = await supabase
         .from('usuarios')
         .upsert([
@@ -72,20 +68,15 @@ export const inserirUsuario = async ({ nome, email, perfil, senha }) => {
                 ativo: true
             }
         ])
-    .select()
+        .select()
 
-    //console.log("RESPOSTA DO INSERT:", data)
-
-    // 4. ROLLBACK SE DER ERRO
+    // ROLLBACK
     if (error) {
-        //console.log("ERRO INSERT TABELA:", error)
 
         await supabaseAdmin.auth.admin.deleteUser(id)
 
         return { error }
     }
-
-    //console.log("USUÁRIO CRIADO COM SUCESSO")
 
     return { data }
 }
@@ -126,20 +117,13 @@ export const atualizarUsuario = async (id, dados) => {
 }
 
 // =========================
-// DELETAR USUÁRIO
+// DESATIVAR USUÁRIO (SOFT DELETE)
 // =========================
 export const deletarUsuario = async (id) => {
 
-    const { error: authError } =
-        await supabaseAdmin.auth.admin.deleteUser(id)
-
-    if (authError) {
-        return { error: authError }
-    }
-
     const { data, error } = await supabase
         .from('usuarios')
-        .delete()
+        .update({ ativo: false })
         .eq('id', id)
         .select()
 

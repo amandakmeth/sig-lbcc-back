@@ -58,7 +58,11 @@ export const inserirProduto = async ({ nome, descricao, unidade }) => {
 export const atualizarProduto = async (id, dados) => {
 
     if (!dados || Object.keys(dados).length === 0) {
-        return { error: { message: 'Nenhum dado informado para atualização' } }
+        return {
+            error: {
+                message: 'Nenhum dado informado para atualização'
+            }
+        }
     }
 
     const { data, error } = await supabase
@@ -71,13 +75,33 @@ export const atualizarProduto = async (id, dados) => {
 }
 
 // =========================
-// DESATIVAR PRODUTO
+// DELETAR PRODUTO (FÍSICO)
 // =========================
 export const desativarProduto = async (id) => {
 
+    /*
+    FUTURAMENTE:
+    verificar FK antes do delete
+
+    Exemplo:
+    const { data: uso } = await supabase
+        .from('movimentacoes')
+        .select('id')
+        .eq('produto_id', id)
+        .limit(1)
+
+    if (uso?.length) {
+        return {
+            error: {
+                message: 'Produto já utilizado e não pode ser excluído'
+            }
+        }
+    }
+    */
+
     const { data, error } = await supabase
         .from('produtos')
-        .update({ ativo: false })
+        .delete()
         .eq('id', id)
         .select()
 

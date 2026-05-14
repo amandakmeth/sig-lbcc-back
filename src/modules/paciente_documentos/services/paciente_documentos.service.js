@@ -71,7 +71,11 @@ export const inserirDocumento = async ({
         await buscarPacientePorId(paciente_id)
 
     if (pacienteError || !paciente) {
-        return { error: { message: 'Paciente não encontrado' } }
+    return { error: { message: 'Paciente não encontrado' } }
+    }
+
+    if (paciente.status === 'inativo') {
+        return { error: { message: 'Paciente inativo' } }
     }
 
     const { data, error } = await supabase

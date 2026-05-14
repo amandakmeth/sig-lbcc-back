@@ -31,6 +31,7 @@ describe('Auth - Regras de Negócio', () => {
             })
 
         expect(res.statusCode).toBe(400)
+        expect(res.body.erro).toBe('Email é obrigatório')
     })
 
     it('não deve logar sem senha', async () => {
@@ -41,9 +42,31 @@ describe('Auth - Regras de Negócio', () => {
             })
 
         expect(res.statusCode).toBe(400)
+        expect(res.body.erro).toBe('Senha é obrigatória')
     })
 
-    it('não deve logar com credenciais inválidas', async () => {
+    it('não deve logar sem email e senha', async () => {
+        const res = await request(app)
+            .post('/auth/login')
+            .send({})
+
+        expect(res.statusCode).toBe(400)
+        expect(res.body.erro).toBe('Email e senha são obrigatórios')
+    })
+
+    it('não deve logar com email inexistente', async () => {
+        const res = await request(app)
+            .post('/auth/login')
+            .send({
+                email: 'naoexiste@email.com',
+                password: '123456'
+            })
+
+        expect(res.statusCode).toBe(404)
+        expect(res.body.erro).toBe('Email não cadastrado no sistema')
+    })
+
+    it('não deve logar com senha incorreta', async () => {
         const res = await request(app)
             .post('/auth/login')
             .send({
@@ -52,16 +75,18 @@ describe('Auth - Regras de Negócio', () => {
             })
 
         expect(res.statusCode).toBe(401)
+        expect(res.body.erro).toBe('Senha incorreta')
     })
 
     // =========================
-    // MIDDLEWARE (PROTEÇÃO DE ROTAS)
+    // MIDDLEWARE
     // =========================
     it('deve bloquear sem token', async () => {
         const res = await request(app)
             .get('/usuarios')
 
         expect(res.statusCode).toBe(401)
+        expect(res.body.erro).toBe('Token não informado')
     })
 
     it('deve bloquear token mal formatado', async () => {
@@ -70,6 +95,7 @@ describe('Auth - Regras de Negócio', () => {
             .set('Authorization', 'Token errado')
 
         expect(res.statusCode).toBe(401)
+        expect(res.body.erro).toBe('Formato do token inválido')
     })
 
     it('deve permitir acesso com token válido', async () => {
@@ -77,7 +103,6 @@ describe('Auth - Regras de Negócio', () => {
             .get('/usuarios')
             .set('Authorization', `Bearer ${token}`)
 
-        // pode variar conforme regra de permissão
         expect([200, 403]).toContain(res.statusCode)
     })
 })
