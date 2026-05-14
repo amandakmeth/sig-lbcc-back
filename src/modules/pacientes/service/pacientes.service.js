@@ -4,6 +4,7 @@ import supabase from '../../../config/supabase.js'
 // LISTAR PACIENTES
 // =========================
 export const listarPacientes = async () => {
+
     return await supabase
         .from('pacientes')
         .select('*')
@@ -13,21 +14,27 @@ export const listarPacientes = async () => {
 // =========================
 // BUSCAR POR ID
 // =========================
-export const buscarPacientePorId = async (id) => {
+export const buscarPacientePorId = async (
+    id
+) => {
+
     return await supabase
         .from('pacientes')
         .select('*')
         .eq('id', id)
-        .single()
+        .maybeSingle()
 }
 
 // =========================
 // CRIAR PACIENTE
 // =========================
-export const inserirPaciente = async (dados) => {
+export const inserirPaciente = async (
+    dados
+) => {
 
-    // valida CPF duplicado
+    // VALIDA CPF DUPLICADO
     if (dados.cpf) {
+
         const { data: existe } = await supabase
             .from('pacientes')
             .select('id')
@@ -35,7 +42,13 @@ export const inserirPaciente = async (dados) => {
             .maybeSingle()
 
         if (existe) {
-            return { error: { message: 'CPF já cadastrado' } }
+
+            return {
+                error: {
+                    message:
+                        'CPF já cadastrado'
+                }
+            }
         }
     }
 
@@ -51,13 +64,25 @@ export const inserirPaciente = async (dados) => {
 // =========================
 // ATUALIZAR PACIENTE
 // =========================
-export const atualizarPaciente = async (id, dados) => {
+export const atualizarPaciente = async (
+    id,
+    dados
+) => {
 
-    if (!dados || Object.keys(dados).length === 0) {
-        return { error: { message: 'Nenhum dado informado para atualização' } }
+    if (
+        !dados ||
+        Object.keys(dados).length === 0
+    ) {
+
+        return {
+            error: {
+                message:
+                    'Nenhum dado informado para atualização'
+            }
+        }
     }
 
-    // valida CPF duplicado
+    // VALIDA CPF DUPLICADO
     if (dados.cpf) {
 
         const { data: existe } = await supabase
@@ -68,9 +93,11 @@ export const atualizarPaciente = async (id, dados) => {
             .maybeSingle()
 
         if (existe) {
+
             return {
                 error: {
-                    message: 'CPF já cadastrado para outro paciente'
+                    message:
+                        'CPF já cadastrado para outro paciente'
                 }
             }
         }
@@ -78,7 +105,10 @@ export const atualizarPaciente = async (id, dados) => {
 
     const { data, error } = await supabase
         .from('pacientes')
-        .update(dados)
+        .update({
+            ...dados,
+            updated_at: new Date()
+        })
         .eq('id', id)
         .select()
 
@@ -86,13 +116,72 @@ export const atualizarPaciente = async (id, dados) => {
 }
 
 // =========================
-// INATIVAR PACIENTE
+// ATIVAR / INATIVAR PACIENTE
 // =========================
-export const desativarPaciente = async (id) => {
+export const alterarStatusPaciente =
+    async (
+        id,
+        status
+    ) => {
 
     const { data, error } = await supabase
         .from('pacientes')
-        .update({ status: 'inativo' })
+        .update({
+            status,
+            updated_at: new Date()
+        })
+        .eq('id', id)
+        .select()
+
+    return { data, error }
+}
+
+// =========================
+// VERIFICAR RELACIONAMENTOS
+// =========================
+export const verificarRelacionamentosPacienteService =
+    async (id) => {
+
+    // DOCUMENTOS DO PACIENTE
+    const {
+        count: documentos,
+        error
+    } = await supabase
+        .from('paciente_documentos')
+        .select('*', {
+            count: 'exact',
+            head: true
+        })
+        .eq('paciente_id', id)
+
+    if (error) {
+
+        return { error }
+    }
+
+    const possuiRelacionamentos =
+        documentos > 0
+
+    return {
+        data: {
+            possuiRelacionamentos,
+            relacionamentos: {
+                documentos
+            }
+        }
+    }
+}
+
+// =========================
+// EXCLUIR PACIENTE
+// =========================
+export const deletarPaciente = async (
+    id
+) => {
+
+    const { data, error } = await supabase
+        .from('pacientes')
+        .delete()
         .eq('id', id)
         .select()
 

@@ -25,7 +25,12 @@ export const buscarUsuarioPorId = async (id) => {
 // =========================
 // CRIAR USUÁRIO
 // =========================
-export const inserirUsuario = async ({ nome, email, perfil, senha }) => {
+export const inserirUsuario = async ({
+    nome,
+    email,
+    perfil,
+    senha
+}) => {
 
     // VERIFICA SE JÁ EXISTE
     const { data: existeTabela } = await supabase
@@ -35,12 +40,13 @@ export const inserirUsuario = async ({ nome, email, perfil, senha }) => {
         .maybeSingle()
 
     if (existeTabela) {
-    return {
-        error: {
-            message: 'Já existe um usuário cadastrado com este e-mail'
+        return {
+            error: {
+                message:
+                    'Já existe um usuário cadastrado com este e-mail'
+            }
         }
     }
-}
 
     // CRIA NO AUTH
     const { data: authData, error: authError } =
@@ -51,7 +57,10 @@ export const inserirUsuario = async ({ nome, email, perfil, senha }) => {
         })
 
     if (authError || !authData?.user) {
-        return { error: authError || 'Erro ao criar usuário no Auth' }
+        return {
+            error:
+                authError || 'Erro ao criar usuário no Auth'
+        }
     }
 
     const id = authData.user.id
@@ -72,9 +81,7 @@ export const inserirUsuario = async ({ nome, email, perfil, senha }) => {
 
     // ROLLBACK
     if (error) {
-
         await supabaseAdmin.auth.admin.deleteUser(id)
-
         return { error }
     }
 
@@ -98,6 +105,7 @@ export const atualizarUsuario = async (id, dados) => {
         return { error }
     }
 
+    // ATUALIZA AUTH
     if (email || senha) {
 
         const updateAuth = {}
@@ -106,7 +114,8 @@ export const atualizarUsuario = async (id, dados) => {
         if (senha) updateAuth.password = senha
 
         const { error: authError } =
-            await supabaseAdmin.auth.admin.updateUserById(id, updateAuth)
+            await supabaseAdmin.auth.admin
+                .updateUserById(id, updateAuth)
 
         if (authError) {
             return { error: authError }
@@ -117,15 +126,120 @@ export const atualizarUsuario = async (id, dados) => {
 }
 
 // =========================
-// DESATIVAR USUÁRIO (SOFT DELETE)
+// ATIVAR / INATIVAR USUÁRIO
 // =========================
-export const deletarUsuario = async (id) => {
+export const alterarStatusUsuario = async (
+    id,
+    ativo
+) => {
 
     const { data, error } = await supabase
         .from('usuarios')
-        .update({ ativo: false })
+        .update({
+            ativo,
+            updated_at: new Date()
+        })
         .eq('id', id)
         .select()
 
     return { data, error }
+}
+
+// =========================
+// VERIFICAR RELACIONAMENTOS
+// =========================
+export const verificarRelacionamentosUsuarioService =
+    async (id) => {
+
+    // PACIENTES CREATED_BY
+    const {
+        count: pacientesCreated,
+        error: error1
+    } = await supabase
+        .from('pacientes')
+        .select('*', {
+            count: 'exact',
+            head: true
+        })
+        .eq('created_by', id)
+
+    if (error1) {
+        return { error: error1 }
+    }
+
+    // PACIENTES UPDATED_BY
+    const {
+        count: pacientesUpdated,
+        error: error2
+    } = await supabase
+        .from('pacientes')
+        .select('*', {
+            count: 'exact',
+            head: true
+        })
+        .eq('updated_by', id)
+
+    if (error2) {
+        return { error: error2 }
+    }
+
+    // DOCUMENTOS
+    const {
+        count: documentos,
+        error: error3
+    } = await supabase
+        .from('paciente_documentos')
+        .select('*', {
+            count: 'exact',
+            head: true
+        })
+        .eq('created_by', id)
+
+    if (error3) {
+        return { error: error3 }
+    }
+
+    const possuiRelacionamentos =
+        (pacientesCreated || 0) > 0 ||
+        (pacientesUpdated || 0) > 0 ||
+        (documentos || 0) > 0
+
+    return {
+        data: {
+            possuiRelacionamentos,
+            relacionamentos: {
+                pacientesCreated: pacientesCreated || 0,
+                pacientesUpdated: pacientesUpdated || 0,
+                documentos: documentos || 0
+            }
+        }
+    }
+}
+
+// =========================
+// EXCLUIR USUÁRIO
+// =========================
+export const deletarUsuario = async (id) => {
+
+    // REMOVE DA TABELA
+    const { data, error } = await supabase
+        .from('usuarios')
+        .delete()
+        .eq('id', id)
+        .select()
+
+    if (error) {
+        return { error }
+    }
+
+    // REMOVE DO AUTH
+    const { error: authError } =
+        await supabaseAdmin.auth.admin
+            .deleteUser(id)
+
+    if (authError) {
+        return { error: authError }
+    }
+
+    return { data }
 }

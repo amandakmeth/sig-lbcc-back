@@ -1,16 +1,20 @@
 import express from 'express'
+
 import {
     getPacientes,
     getPacienteById,
     createPaciente,
     updatePaciente,
-    deletePaciente
+    deletePaciente,
+    toggleStatusPaciente,
+    verificarRelacionamentosPaciente
 } from '../controller/pacientes.controller.js'
 
 import { authMiddleware } from '../../auth/middlewares/auth.middleware.js'
 
 const router = express.Router()
 
+// ROTAS PROTEGIDAS
 router.use(authMiddleware)
 
 /**
@@ -137,13 +141,43 @@ router.put('/:id', updatePaciente)
 
 /**
  * @swagger
- * /pacientes/{id}:
- *   delete:
- *     summary: Inativar paciente
+ * /pacientes/{id}/status:
+ *   patch:
+ *     summary: Ativar ou inativar paciente
  *     tags: [Pacientes]
  *     security:
  *       - bearerAuth: []
- *     description: Altera o status do paciente para inativo
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: ID do paciente
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 example: inativo
+ *     responses:
+ *       200:
+ *         description: Status alterado com sucesso
+ */
+router.patch('/:id/status', toggleStatusPaciente)
+
+/**
+ * @swagger
+ * /pacientes/{id}/relacionamentos:
+ *   get:
+ *     summary: Verificar relacionamentos do paciente
+ *     tags: [Pacientes]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -153,7 +187,34 @@ router.put('/:id', updatePaciente)
  *           type: string
  *     responses:
  *       200:
- *         description: Paciente inativado
+ *         description: Relacionamentos verificados
+ */
+router.get(
+    '/:id/relacionamentos',
+    verificarRelacionamentosPaciente
+)
+
+/**
+ * @swagger
+ * /pacientes/{id}:
+ *   delete:
+ *     summary: Excluir paciente definitivamente
+ *     tags: [Pacientes]
+ *     security:
+ *       - bearerAuth: []
+ *     description: Exclui o paciente apenas se não possuir vínculos
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: ID do paciente
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Paciente excluído
+ *       400:
+ *         description: Paciente possui vínculos
  */
 router.delete('/:id', deletePaciente)
 

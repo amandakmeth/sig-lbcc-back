@@ -1,16 +1,19 @@
 import express from 'express'
+
 import {
     getAreas,
     getAreaById,
     createArea,
     updateArea,
-    deleteArea
+    deleteArea,
+    verificarRelacionamentosArea
 } from '../controllers/areas.controller.js'
+
 import { authMiddleware } from '../../auth/middlewares/auth.middleware.js'
 
 const router = express.Router()
 
-//protegidas
+// PROTEGIDAS
 router.use(authMiddleware)
 
 /**
@@ -110,9 +113,9 @@ router.put('/:id', updateArea)
 
 /**
  * @swagger
- * /areas/{id}:
- *   delete:
- *     summary: Desativar área
+ * /areas/{id}/relacionamentos:
+ *   get:
+ *     summary: Verificar relacionamentos da área
  *     tags: [Áreas]
  *     security:
  *       - bearerAuth: []
@@ -125,7 +128,37 @@ router.put('/:id', updateArea)
  *           type: string
  *     responses:
  *       200:
- *         description: Área desativada
+ *         description: Relacionamentos verificados
+ *       403:
+ *         description: Sem permissão
+ */
+router.get(
+    '/:id/relacionamentos',
+    verificarRelacionamentosArea
+)
+
+/**
+ * @swagger
+ * /areas/{id}:
+ *   delete:
+ *     summary: Excluir área definitivamente
+ *     tags: [Áreas]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: ID da área
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Área excluída
+ *       400:
+ *         description: Área possui vínculos
+ *       403:
+ *         description: Apenas gestor pode excluir
  */
 router.delete('/:id', deleteArea)
 

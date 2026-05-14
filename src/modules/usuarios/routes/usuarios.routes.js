@@ -4,8 +4,11 @@ import {
     getUsuarioById,
     createUsuario,
     updateUsuario,
-    deleteUsuario
+    deleteUsuario,
+    toggleStatusUsuario,
+    verificarRelacionamentosUsuario
 } from '../controllers/usuarios.controller.js'
+
 import { authMiddleware } from '../../auth/middlewares/auth.middleware.js'
 
 const router = express.Router()
@@ -125,9 +128,42 @@ router.put('/:id', updateUsuario)
 
 /**
  * @swagger
- * /usuarios/{id}:
- *   delete:
- *     summary: Deletar usuário
+ * /usuarios/{id}/status:
+ *   patch:
+ *     summary: Ativar ou inativar usuário
+ *     tags: [Usuários]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: ID do usuário
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               ativo:
+ *                 type: boolean
+ *                 example: false
+ *     responses:
+ *       200:
+ *         description: Status alterado com sucesso
+ *       403:
+ *         description: Apenas gestor pode alterar status
+ */
+router.patch('/:id/status', toggleStatusUsuario)
+
+/**
+ * @swagger
+ * /usuarios/{id}/relacionamentos:
+ *   get:
+ *     summary: Verificar relacionamentos do usuário
  *     tags: [Usuários]
  *     security:
  *       - bearerAuth: []
@@ -140,7 +176,35 @@ router.put('/:id', updateUsuario)
  *           type: string
  *     responses:
  *       200:
- *         description: Usuário deletado
+ *         description: Relacionamentos verificados
+ *       403:
+ *         description: Sem permissão
+ */
+router.get(
+    '/:id/relacionamentos',
+    verificarRelacionamentosUsuario
+)
+
+/**
+ * @swagger
+ * /usuarios/{id}:
+ *   delete:
+ *     summary: Excluir usuário definitivamente
+ *     tags: [Usuários]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: ID do usuário
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Usuário excluído
+ *       400:
+ *         description: Usuário possui vínculos
  *       403:
  *         description: Apenas gestor pode excluir
  */

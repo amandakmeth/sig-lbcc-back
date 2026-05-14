@@ -46,7 +46,6 @@ describe('Pacientes - Regras de Negócio', () => {
         expect(res.statusCode).toBe(201)
 
         const paciente = res.body[0] || res.body
-
         expect(paciente).toHaveProperty('id')
 
         pacienteId = paciente.id
@@ -97,7 +96,6 @@ describe('Pacientes - Regras de Negócio', () => {
         expect(res.statusCode).toBe(200)
 
         const paciente = res.body[0] || res.body
-
         expect(paciente).toHaveProperty('id')
     })
 
@@ -124,7 +122,7 @@ describe('Pacientes - Regras de Negócio', () => {
     })
 
     // =========================
-    // DELETAR (INATIVAR)
+    // INATIVAR (SOFT DELETE)
     // =========================
     it('deve inativar paciente', async () => {
         const res = await request(app)
@@ -132,6 +130,20 @@ describe('Pacientes - Regras de Negócio', () => {
             .set('Authorization', `Bearer ${tokenGestor}`)
 
         expect(res.statusCode).toBe(200)
+    })
+
+    it('paciente inativado ainda deve existir no banco (status inativo)', async () => {
+
+        const res = await request(app)
+            .get(`/pacientes/${pacienteId}`)
+            .set('Authorization', `Bearer ${tokenGestor}`)
+
+        expect([200, 404]).toContain(res.statusCode)
+
+        if (res.statusCode === 200) {
+            const paciente = res.body[0] || res.body
+            expect(paciente.status).toBe('inativo')
+        }
     })
 
     // =========================

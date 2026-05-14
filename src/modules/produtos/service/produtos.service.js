@@ -3,7 +3,10 @@ import supabase from '../../../config/supabase.js'
 // =========================
 // LISTAR PRODUTOS
 // =========================
-export const listarProdutos = async (ativo = true) => {
+export const listarProdutos = async (
+    ativo = true
+) => {
+
     return await supabase
         .from('produtos')
         .select('*')
@@ -15,6 +18,7 @@ export const listarProdutos = async (ativo = true) => {
 // BUSCAR POR ID
 // =========================
 export const buscarProdutoPorId = async (id) => {
+
     return await supabase
         .from('produtos')
         .select('*')
@@ -25,9 +29,13 @@ export const buscarProdutoPorId = async (id) => {
 // =========================
 // CRIAR PRODUTO
 // =========================
-export const inserirProduto = async ({ nome, descricao, unidade }) => {
+export const inserirProduto = async ({
+    nome,
+    descricao,
+    unidade
+}) => {
 
-    // evita duplicado
+    // EVITA DUPLICIDADE
     const { data: existe } = await supabase
         .from('produtos')
         .select('id')
@@ -35,7 +43,12 @@ export const inserirProduto = async ({ nome, descricao, unidade }) => {
         .maybeSingle()
 
     if (existe) {
-        return { error: { message: 'Produto já cadastrado' } }
+
+        return {
+            error: {
+                message: 'Produto já cadastrado'
+            }
+        }
     }
 
     const { data, error } = await supabase
@@ -55,19 +68,51 @@ export const inserirProduto = async ({ nome, descricao, unidade }) => {
 // =========================
 // ATUALIZAR PRODUTO
 // =========================
-export const atualizarProduto = async (id, dados) => {
+export const atualizarProduto = async (
+    id,
+    dados
+) => {
 
-    if (!dados || Object.keys(dados).length === 0) {
+    if (
+        !dados ||
+        Object.keys(dados).length === 0
+    ) {
+
         return {
             error: {
-                message: 'Nenhum dado informado para atualização'
+                message:
+                    'Nenhum dado informado para atualização'
+            }
+        }
+    }
+
+    // VERIFICA DUPLICIDADE
+    if (dados.nome) {
+
+        const { data: existe } = await supabase
+            .from('produtos')
+            .select('id')
+            .eq('nome', dados.nome)
+            .neq('id', id)
+            .maybeSingle()
+
+        if (existe) {
+
+            return {
+                error: {
+                    message:
+                        'Já existe um produto com este nome'
+                }
             }
         }
     }
 
     const { data, error } = await supabase
         .from('produtos')
-        .update(dados)
+        .update({
+            ...dados,
+            updated_at: new Date()
+        })
         .eq('id', id)
         .select()
 
@@ -75,29 +120,48 @@ export const atualizarProduto = async (id, dados) => {
 }
 
 // =========================
-// DELETAR PRODUTO (FÍSICO)
+// ATIVAR / INATIVAR PRODUTO
 // =========================
-export const desativarProduto = async (id) => {
+export const alterarStatusProduto = async (
+    id,
+    ativo
+) => {
+
+    const { data, error } = await supabase
+        .from('produtos')
+        .update({
+            ativo,
+            updated_at: new Date()
+        })
+        .eq('id', id)
+        .select()
+
+    return { data, error }
+}
+
+// =========================
+// VERIFICAR RELACIONAMENTOS
+// =========================
+export const verificarRelacionamentosProdutoService =
+    async (id) => {
 
     /*
-    FUTURAMENTE:
-    verificar FK antes do delete
+    Atualmente a tabela produtos
+    não possui relacionamentos
+    */
 
-    Exemplo:
-    const { data: uso } = await supabase
-        .from('movimentacoes')
-        .select('id')
-        .eq('produto_id', id)
-        .limit(1)
-
-    if (uso?.length) {
-        return {
-            error: {
-                message: 'Produto já utilizado e não pode ser excluído'
-            }
+    return {
+        data: {
+            possuiRelacionamentos: false,
+            relacionamentos: {}
         }
     }
-    */
+}
+
+// =========================
+// EXCLUIR PRODUTO
+// =========================
+export const deletarProduto = async (id) => {
 
     const { data, error } = await supabase
         .from('produtos')
