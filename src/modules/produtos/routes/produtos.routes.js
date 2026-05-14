@@ -1,17 +1,20 @@
 import express from 'express'
+
 import {
     getProdutos,
     getProdutoById,
     createProduto,
     updateProduto,
-    deleteProduto
+    deleteProduto,
+    toggleStatusProduto,
+    verificarRelacionamentosProduto
 } from '../controller/produtos.controller.js'
 
 import { authMiddleware } from '../../auth/middlewares/auth.middleware.js'
 
 const router = express.Router()
 
-//rotas protegidas
+// ROTAS PROTEGIDAS
 router.use(authMiddleware)
 
 /**
@@ -67,6 +70,7 @@ router.get('/:id', getProdutoById)
  *             type: object
  *             required:
  *               - nome
+ *               - unidade
  *             properties:
  *               nome:
  *                 type: string
@@ -74,12 +78,9 @@ router.get('/:id', getProdutoById)
  *               descricao:
  *                 type: string
  *                 example: Equipamento de mobilidade
- *               quantidade:
- *                 type: integer
- *                 example: 10
- *               valor:
- *                 type: number
- *                 example: 1500.50
+ *               unidade:
+ *                 type: string
+ *                 example: UN
  *     responses:
  *       201:
  *         description: Produto criado com sucesso
@@ -108,8 +109,8 @@ router.post('/', createProduto)
  *         application/json:
  *           example:
  *             nome: Produto atualizado
- *             quantidade: 20
- *             valor: 2000
+ *             descricao: Nova descrição
+ *             unidade: CX
  *     responses:
  *       200:
  *         description: Produto atualizado
@@ -118,9 +119,42 @@ router.put('/:id', updateProduto)
 
 /**
  * @swagger
- * /produtos/{id}:
- *   delete:
- *     summary: Deletar produto
+ * /produtos/{id}/status:
+ *   patch:
+ *     summary: Ativar ou inativar produto
+ *     tags: [Produtos]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: ID do produto
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               ativo:
+ *                 type: boolean
+ *                 example: false
+ *     responses:
+ *       200:
+ *         description: Status alterado com sucesso
+ *       403:
+ *         description: Apenas gestor pode alterar status
+ */
+router.patch('/:id/status', toggleStatusProduto)
+
+/**
+ * @swagger
+ * /produtos/{id}/relacionamentos:
+ *   get:
+ *     summary: Verificar relacionamentos do produto
  *     tags: [Produtos]
  *     security:
  *       - bearerAuth: []
@@ -133,7 +167,37 @@ router.put('/:id', updateProduto)
  *           type: string
  *     responses:
  *       200:
- *         description: Produto deletado
+ *         description: Relacionamentos verificados
+ *       403:
+ *         description: Sem permissão
+ */
+router.get(
+    '/:id/relacionamentos',
+    verificarRelacionamentosProduto
+)
+
+/**
+ * @swagger
+ * /produtos/{id}:
+ *   delete:
+ *     summary: Excluir produto definitivamente
+ *     tags: [Produtos]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: ID do produto
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Produto excluído
+ *       400:
+ *         description: Produto possui vínculos
+ *       403:
+ *         description: Apenas gestor pode excluir
  */
 router.delete('/:id', deleteProduto)
 

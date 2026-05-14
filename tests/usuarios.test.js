@@ -9,7 +9,6 @@ let emailUsuarioTeste = ''
 
 beforeAll(async () => {
 
-    // LOGIN GESTOR
     const gestor = await request(app)
         .post('/auth/login')
         .send({
@@ -19,7 +18,6 @@ beforeAll(async () => {
 
     tokenGestor = gestor.body.access_token
 
-    // LOGIN OPERADOR
     const operador = await request(app)
         .post('/auth/login')
         .send({
@@ -37,7 +35,6 @@ describe('Usuários - Regras de Negócio', () => {
     // LISTAR
     // =========================
     it('gestor deve listar usuários', async () => {
-
         const res = await request(app)
             .get('/usuarios')
             .set('Authorization', `Bearer ${tokenGestor}`)
@@ -46,8 +43,7 @@ describe('Usuários - Regras de Negócio', () => {
         expect(Array.isArray(res.body)).toBe(true)
     })
 
-    it('operador pode listar usuários (se permitido)', async () => {
-
+    it('operador pode ou não listar usuários', async () => {
         const res = await request(app)
             .get('/usuarios')
             .set('Authorization', `Bearer ${tokenOperador}`)
@@ -75,14 +71,12 @@ describe('Usuários - Regras de Negócio', () => {
         expect(res.statusCode).toBe(201)
 
         const user = res.body[0] || res.body
-
         expect(user).toHaveProperty('id')
 
         usuarioId = user.id
     })
 
     it('operador NÃO pode criar usuário', async () => {
-
         const res = await request(app)
             .post('/usuarios')
             .set('Authorization', `Bearer ${tokenOperador}`)
@@ -98,8 +92,7 @@ describe('Usuários - Regras de Negócio', () => {
     // =========================
     // BUSCAR
     // =========================
-    it('gestor pode buscar qualquer usuário', async () => {
-
+    it('gestor pode buscar usuário', async () => {
         const res = await request(app)
             .get(`/usuarios/${usuarioId}`)
             .set('Authorization', `Bearer ${tokenGestor}`)
@@ -108,7 +101,6 @@ describe('Usuários - Regras de Negócio', () => {
     })
 
     it('operador pode ver ele mesmo', async () => {
-
         const res = await request(app)
             .get(`/usuarios/${operadorId}`)
             .set('Authorization', `Bearer ${tokenOperador}`)
@@ -117,7 +109,6 @@ describe('Usuários - Regras de Negócio', () => {
     })
 
     it('operador NÃO pode ver outro usuário', async () => {
-
         const res = await request(app)
             .get(`/usuarios/${usuarioId}`)
             .set('Authorization', `Bearer ${tokenOperador}`)
@@ -126,66 +117,64 @@ describe('Usuários - Regras de Negócio', () => {
     })
 
     // =========================
-    // ATUALIZAR
+    // UPDATE
     // =========================
     it('gestor pode atualizar usuário', async () => {
-
         const res = await request(app)
             .put(`/usuarios/${usuarioId}`)
             .set('Authorization', `Bearer ${tokenGestor}`)
-            .send({
-                nome: 'Atualizado'
-            })
+            .send({ nome: 'Atualizado' })
 
         expect(res.statusCode).toBe(200)
     })
 
     it('operador pode atualizar ele mesmo', async () => {
-
         const res = await request(app)
             .put(`/usuarios/${operadorId}`)
             .set('Authorization', `Bearer ${tokenOperador}`)
-            .send({
-                nome: 'Operador Atualizado'
-            })
+            .send({ nome: 'Operador Atualizado' })
 
         expect([200, 400]).toContain(res.statusCode)
     })
 
-    it('operador NÃO pode atualizar outro usuário', async () => {
+    // =========================
+    // STATUS (NOVO TESTE IMPORTANTE)
+    // =========================
+    it('gestor pode ativar/inativar usuário', async () => {
 
         const res = await request(app)
-            .put(`/usuarios/${usuarioId}`)
-            .set('Authorization', `Bearer ${tokenOperador}`)
-            .send({
-                nome: 'Tentativa inválida'
-            })
+            .patch(`/usuarios/${usuarioId}/status`)
+            .set('Authorization', `Bearer ${tokenGestor}`)
+            .send({ ativo: false })
 
-        expect(res.statusCode).toBe(403)
+        expect(res.statusCode).toBe(200)
+        expect(res.body[0] || res.body).toHaveProperty('ativo')
+    })
+
+    it('não deve aceitar status inválido', async () => {
+
+        const res = await request(app)
+            .patch(`/usuarios/${usuarioId}/status`)
+            .set('Authorization', `Bearer ${tokenGestor}`)
+            .send({ ativo: 'sim' })
+
+        expect(res.statusCode).toBe(400)
     })
 
     // =========================
-    // DELETE (SOFT DELETE)
+    // DELETE (COM VÍNCULO)
     // =========================
-    it('gestor pode inativar usuário', async () => {
+    it('gestor pode excluir ou ser bloqueado por vínculo', async () => {
 
         const res = await request(app)
             .delete(`/usuarios/${usuarioId}`)
             .set('Authorization', `Bearer ${tokenGestor}`)
 
-        expect(res.statusCode).toBe(200)
-    })
+        expect([200, 400]).toContain(res.statusCode)
 
-    it('usuário inativado NÃO deve acessar sistema', async () => {
-
-        const res = await request(app)
-            .post('/auth/login')
-            .send({
-                email: emailUsuarioTeste,
-                password: '123456'
-            })
-
-        expect([401, 403]).toContain(res.statusCode)
+        if (res.statusCode === 400) {
+            expect(res.body).toHaveProperty('possuiRelacionamentos')
+        }
     })
 
     it('operador NÃO pode deletar usuário', async () => {

@@ -2,24 +2,33 @@ import {
     listarAreas,
     buscarAreaPorId,
     inserirArea,
-    atualizarArea
+    atualizarArea,
+    deletarArea,
+    verificarRelacionamentosAreaService
 } from '../services/areas.service.js'
-import supabase from '../../../config/supabase.js'
 
 // =========================
 // LISTAR ÁREAS
 // =========================
 export const getAreas = async (req, res) => {
     try {
-        const { data, error } = await listarAreas(true)
+
+        const { data, error } =
+            await listarAreas(true)
 
         if (error) {
-            return res.status(500).json({ erro: error.message })
+            return res.status(500).json({
+                erro: error.message
+            })
         }
 
         res.json(data)
+
     } catch (err) {
-        return res.status(500).json({ erro: 'Erro ao listar áreas' })
+
+        return res.status(500).json({
+            erro: 'Erro ao listar áreas'
+        })
     }
 }
 
@@ -27,18 +36,27 @@ export const getAreas = async (req, res) => {
 // BUSCAR POR ID
 // =========================
 export const getAreaById = async (req, res) => {
+
     try {
+
         const { id } = req.params
 
-        const { data, error } = await buscarAreaPorId(id)
+        const { data, error } =
+            await buscarAreaPorId(id)
 
         if (error || !data) {
-            return res.status(404).json({ erro: 'Área não encontrada' })
+            return res.status(404).json({
+                erro: 'Área não encontrada'
+            })
         }
 
         res.json(data)
+
     } catch (err) {
-        return res.status(500).json({ erro: 'Erro ao buscar área' })
+
+        return res.status(500).json({
+            erro: 'Erro ao buscar área'
+        })
     }
 }
 
@@ -46,26 +64,42 @@ export const getAreaById = async (req, res) => {
 // CRIAR ÁREA
 // =========================
 export const createArea = async (req, res) => {
+
     try {
+
         if (req.user.perfil !== 'gestor') {
-            return res.status(403).json({ erro: 'Apenas gestor pode criar áreas' })
+            return res.status(403).json({
+                erro: 'Apenas gestor pode criar áreas'
+            })
         }
 
         const { nome, descricao } = req.body
 
         if (!nome) {
-            return res.status(400).json({ erro: 'Nome é obrigatório' })
+            return res.status(400).json({
+                erro: 'Nome é obrigatório'
+            })
         }
 
-        const { data, error } = await inserirArea({ nome, descricao })
+        const { data, error } =
+            await inserirArea({
+                nome,
+                descricao
+            })
 
         if (error) {
-            return res.status(400).json({ erro: error.message || error })
+            return res.status(400).json({
+                erro: error.message || error
+            })
         }
 
         res.status(201).json(data)
+
     } catch (err) {
-        return res.status(500).json({ erro: 'Erro ao criar área' })
+
+        return res.status(500).json({
+            erro: 'Erro ao criar área'
+        })
     }
 }
 
@@ -73,22 +107,69 @@ export const createArea = async (req, res) => {
 // ATUALIZAR ÁREA
 // =========================
 export const updateArea = async (req, res) => {
+
     try {
+
         if (req.user.perfil !== 'gestor') {
-            return res.status(403).json({ erro: 'Apenas gestor pode atualizar áreas' })
+            return res.status(403).json({
+                erro: 'Apenas gestor pode atualizar áreas'
+            })
         }
 
         const { id } = req.params
 
-        const { data, error } = await atualizarArea(id, req.body)
+        const { data, error } =
+            await atualizarArea(id, req.body)
 
         if (error) {
-            return res.status(400).json({ erro: error.message || error })
+            return res.status(400).json({
+                erro: error.message || error
+            })
         }
 
         res.json(data)
+
     } catch (err) {
-        return res.status(500).json({ erro: 'Erro ao atualizar área' })
+
+        return res.status(500).json({
+            erro: 'Erro ao atualizar área'
+        })
+    }
+}
+
+// =========================
+// VERIFICAR RELACIONAMENTOS
+// =========================
+export const verificarRelacionamentosArea =
+    async (req, res) => {
+
+    try {
+
+        if (req.user.perfil !== 'gestor') {
+            return res.status(403).json({
+                erro: 'Sem permissão'
+            })
+        }
+
+        const { id } = req.params
+
+        const { data, error } =
+            await verificarRelacionamentosAreaService(id)
+
+        if (error) {
+            return res.status(500).json({
+                erro: error.message
+            })
+        }
+
+        return res.json(data)
+
+    } catch (err) {
+
+        return res.status(500).json({
+            erro:
+                'Erro ao verificar relacionamentos'
+        })
     }
 }
 
@@ -96,6 +177,7 @@ export const updateArea = async (req, res) => {
 // EXCLUIR ÁREA
 // =========================
 export const deleteArea = async (req, res) => {
+
     try {
 
         if (req.user.perfil !== 'gestor') {
@@ -106,24 +188,30 @@ export const deleteArea = async (req, res) => {
 
         const { id } = req.params
 
-        // verificar vínculos
-        const { data: usuarios } = await supabase
-            .from('usuarios')
-            .select('id')
-            .eq('area_id', id)
-            .limit(1)
+        const {
+            data: relacionamentos,
+            error: relError
+        } =
+            await verificarRelacionamentosAreaService(id)
 
-        if (usuarios && usuarios.length > 0) {
-            return res.status(400).json({
-                erro: 'Área possui usuários vinculados'
+        if (relError) {
+            return res.status(500).json({
+                erro: relError.message
             })
         }
 
-        // exclusão física
-        const { error } = await supabase
-            .from('areas')
-            .delete()
-            .eq('id', id)
+        if (
+            relacionamentos.possuiRelacionamentos
+        ) {
+
+            return res.status(400).json({
+                erro: 'Área possui vínculos',
+                possuiRelacionamentos: true
+            })
+        }
+
+        const { error } =
+            await deletarArea(id)
 
         if (error) {
             return res.status(500).json({
@@ -136,6 +224,7 @@ export const deleteArea = async (req, res) => {
         })
 
     } catch (err) {
+
         return res.status(500).json({
             erro: 'Erro ao excluir área'
         })

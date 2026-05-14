@@ -4,6 +4,7 @@ import supabase from '../../../config/supabase.js'
 // LISTAR ÁREAS (APENAS ATIVAS)
 // =========================
 export const listarAreas = async (ativo = true) => {
+
     return await supabase
         .from('areas')
         .select('*')
@@ -15,6 +16,7 @@ export const listarAreas = async (ativo = true) => {
 // BUSCAR ÁREA POR ID
 // =========================
 export const buscarAreaPorId = async (id) => {
+
     return await supabase
         .from('areas')
         .select('*')
@@ -25,9 +27,12 @@ export const buscarAreaPorId = async (id) => {
 // =========================
 // CRIAR ÁREA
 // =========================
-export const inserirArea = async ({ nome, descricao }) => {
+export const inserirArea = async ({
+    nome,
+    descricao
+}) => {
 
-    // verifica duplicidade
+    // VERIFICA DUPLICIDADE
     const { data: existe } = await supabase
         .from('areas')
         .select('id')
@@ -35,7 +40,12 @@ export const inserirArea = async ({ nome, descricao }) => {
         .maybeSingle()
 
     if (existe) {
-        return { error: { message: 'Área já cadastrada' } }
+
+        return {
+            error: {
+                message: 'Área já cadastrada'
+            }
+        }
     }
 
     const { data, error } = await supabase
@@ -54,15 +64,51 @@ export const inserirArea = async ({ nome, descricao }) => {
 // =========================
 // ATUALIZAR ÁREA
 // =========================
-export const atualizarArea = async (id, dados) => {
+export const atualizarArea = async (
+    id,
+    dados
+) => {
 
-    if (!dados || Object.keys(dados).length === 0) {
-        return { error: { message: 'Nenhum dado informado para atualização' } }
+    if (
+        !dados ||
+        Object.keys(dados).length === 0
+    ) {
+
+        return {
+            error: {
+                message:
+                    'Nenhum dado informado para atualização'
+            }
+        }
+    }
+
+    // VERIFICA DUPLICIDADE DE NOME
+    if (dados.nome) {
+
+        const { data: existe } = await supabase
+            .from('areas')
+            .select('id')
+            .eq('nome', dados.nome)
+            .neq('id', id)
+            .maybeSingle()
+
+        if (existe) {
+
+            return {
+                error: {
+                    message:
+                        'Já existe uma área com este nome'
+                }
+            }
+        }
     }
 
     const { data, error } = await supabase
         .from('areas')
-        .update(dados)
+        .update({
+            ...dados,
+            updated_at: new Date()
+        })
         .eq('id', id)
         .select()
 
@@ -70,7 +116,24 @@ export const atualizarArea = async (id, dados) => {
 }
 
 // =========================
-// DELETAR ÁREA (FÍSICO)
+// VERIFICAR RELACIONAMENTOS
+// =========================
+export const verificarRelacionamentosAreaService =
+    async (id) => {
+
+    // Atualmente a tabela areas
+    // não possui relacionamentos
+
+    return {
+        data: {
+            possuiRelacionamentos: false,
+            relacionamentos: {}
+        }
+    }
+}
+
+// =========================
+// EXCLUIR ÁREA
 // =========================
 export const deletarArea = async (id) => {
 
