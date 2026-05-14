@@ -70,13 +70,13 @@ export const atualizarArea = async (id, dados) => {
 }
 
 // =========================
-// DESATIVAR ÁREA (SOFT DELETE)
+// DELETAR ÁREA (FÍSICO)
 // =========================
-export const desativarArea = async (id) => {
+export const deletarArea = async (id) => {
 
     const { data, error } = await supabase
         .from('areas')
-        .update({ ativo: false })
+        .delete()
         .eq('id', id)
         .select()
 

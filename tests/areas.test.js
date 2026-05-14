@@ -8,12 +8,16 @@ let areaId = ''
 
 beforeAll(async () => {
     const tokens = await getTokens()
+
     tokenGestor = tokens.gestor
     tokenOperador = tokens.operador
 })
 
 describe('Áreas - Regras de Negócio', () => {
 
+    // =========================
+    // LISTAR
+    // =========================
     it('deve listar áreas (autenticado)', async () => {
         const res = await request(app)
             .get('/areas')
@@ -21,8 +25,21 @@ describe('Áreas - Regras de Negócio', () => {
 
         expect(res.statusCode).toBe(200)
         expect(Array.isArray(res.body)).toBe(true)
+
+        // valida ordenação A-Z
+        if (res.body.length > 1) {
+            const nomes = res.body.map(a => a.nome)
+            const ordenados = [...nomes].sort((a, b) =>
+                a.localeCompare(b)
+            )
+
+            expect(nomes).toEqual(ordenados)
+        }
     })
 
+    // =========================
+    // CRIAR
+    // =========================
     it('gestor deve criar área', async () => {
         const res = await request(app)
             .post('/areas')
@@ -35,6 +52,9 @@ describe('Áreas - Regras de Negócio', () => {
         expect(res.statusCode).toBe(201)
 
         const area = res.body[0] || res.body
+
+        expect(area).toHaveProperty('id')
+
         areaId = area.id
     })
 
@@ -42,7 +62,9 @@ describe('Áreas - Regras de Negócio', () => {
         const res = await request(app)
             .post('/areas')
             .set('Authorization', `Bearer ${tokenOperador}`)
-            .send({ nome: 'Área inválida' })
+            .send({
+                nome: 'Área inválida'
+            })
 
         expect(res.statusCode).toBe(403)
     })
@@ -56,12 +78,19 @@ describe('Áreas - Regras de Negócio', () => {
         expect(res.statusCode).toBe(400)
     })
 
+    // =========================
+    // BUSCAR POR ID
+    // =========================
     it('deve buscar área por id', async () => {
         const res = await request(app)
             .get(`/areas/${areaId}`)
             .set('Authorization', `Bearer ${tokenGestor}`)
 
         expect(res.statusCode).toBe(200)
+
+        const area = res.body[0] || res.body
+
+        expect(area).toHaveProperty('id')
     })
 
     it('deve retornar 404 para área inexistente', async () => {
@@ -72,11 +101,16 @@ describe('Áreas - Regras de Negócio', () => {
         expect(res.statusCode).toBe(404)
     })
 
+    // =========================
+    // ATUALIZAR
+    // =========================
     it('gestor deve atualizar área', async () => {
         const res = await request(app)
             .put(`/areas/${areaId}`)
             .set('Authorization', `Bearer ${tokenGestor}`)
-            .send({ descricao: 'Atualizada' })
+            .send({
+                descricao: 'Atualizada'
+            })
 
         expect(res.statusCode).toBe(200)
     })
@@ -85,11 +119,16 @@ describe('Áreas - Regras de Negócio', () => {
         const res = await request(app)
             .put(`/areas/${areaId}`)
             .set('Authorization', `Bearer ${tokenOperador}`)
-            .send({ descricao: 'Tentativa inválida' })
+            .send({
+                descricao: 'Tentativa inválida'
+            })
 
         expect(res.statusCode).toBe(403)
     })
 
+    // =========================
+    // EXCLUIR
+    // =========================
     it('operador NÃO pode excluir área', async () => {
         const res = await request(app)
             .delete(`/areas/${areaId}`)
@@ -98,7 +137,7 @@ describe('Áreas - Regras de Negócio', () => {
         expect(res.statusCode).toBe(403)
     })
 
-    it('gestor deve excluir área', async () => {
+    it('gestor deve excluir área fisicamente', async () => {
         const res = await request(app)
             .delete(`/areas/${areaId}`)
             .set('Authorization', `Bearer ${tokenGestor}`)
@@ -106,6 +145,17 @@ describe('Áreas - Regras de Negócio', () => {
         expect(res.statusCode).toBe(200)
     })
 
+    it('não deve encontrar área excluída', async () => {
+        const res = await request(app)
+            .get(`/areas/${areaId}`)
+            .set('Authorization', `Bearer ${tokenGestor}`)
+
+        expect(res.statusCode).toBe(404)
+    })
+
+    // =========================
+    // SEM TOKEN
+    // =========================
     it('não deve acessar sem token', async () => {
         const res = await request(app)
             .get('/areas')
