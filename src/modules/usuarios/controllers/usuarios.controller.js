@@ -130,16 +130,8 @@ export const toggleStatusUsuario = async (req, res) => {
     }
 
     const { id } = req.params
-    const { ativo } = req.body
 
-    if (typeof ativo !== 'boolean') {
-        return res.status(400).json({
-            erro: 'Campo ativo deve ser boolean'
-        })
-    }
-
-    const { data, error } =
-        await alterarStatusUsuario(id, ativo)
+    const { data, error } = await alterarStatusUsuario(id)
 
     if (error) {
         return res.status(500).json({
