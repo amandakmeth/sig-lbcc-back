@@ -71,6 +71,7 @@ describe('Usuários - Regras de Negócio', () => {
         expect(res.statusCode).toBe(201)
 
         const user = res.body[0] || res.body
+
         expect(user).toHaveProperty('id')
 
         usuarioId = user.id
@@ -123,7 +124,9 @@ describe('Usuários - Regras de Negócio', () => {
         const res = await request(app)
             .put(`/usuarios/${usuarioId}`)
             .set('Authorization', `Bearer ${tokenGestor}`)
-            .send({ nome: 'Atualizado' })
+            .send({
+                nome: 'Atualizado'
+            })
 
         expect(res.statusCode).toBe(200)
     })
@@ -132,33 +135,49 @@ describe('Usuários - Regras de Negócio', () => {
         const res = await request(app)
             .put(`/usuarios/${operadorId}`)
             .set('Authorization', `Bearer ${tokenOperador}`)
-            .send({ nome: 'Operador Atualizado' })
+            .send({
+                nome: 'Operador Atualizado'
+            })
 
         expect([200, 400]).toContain(res.statusCode)
     })
 
     // =========================
-    // STATUS (NOVO TESTE IMPORTANTE)
+    // STATUS
     // =========================
     it('gestor pode ativar/inativar usuário', async () => {
 
-        const res = await request(app)
+        const res1 = await request(app)
             .patch(`/usuarios/${usuarioId}/status`)
             .set('Authorization', `Bearer ${tokenGestor}`)
-            .send({ ativo: false })
 
-        expect(res.statusCode).toBe(200)
-        expect(res.body[0] || res.body).toHaveProperty('ativo')
+        expect(res1.statusCode).toBe(200)
+
+        const usuario1 = res1.body[0] || res1.body
+
+        expect(usuario1).toHaveProperty('ativo')
+
+        const statusAnterior = usuario1.ativo
+
+        const res2 = await request(app)
+            .patch(`/usuarios/${usuarioId}/status`)
+            .set('Authorization', `Bearer ${tokenGestor}`)
+
+        expect(res2.statusCode).toBe(200)
+
+        const usuario2 = res2.body[0] || res2.body
+
+        expect(usuario2).toHaveProperty('ativo')
+        expect(usuario2.ativo).not.toBe(statusAnterior)
     })
 
-    it('não deve aceitar status inválido', async () => {
+    it('operador NÃO pode alterar status de usuário', async () => {
 
         const res = await request(app)
             .patch(`/usuarios/${usuarioId}/status`)
-            .set('Authorization', `Bearer ${tokenGestor}`)
-            .send({ ativo: 'sim' })
+            .set('Authorization', `Bearer ${tokenOperador}`)
 
-        expect(res.statusCode).toBe(400)
+        expect(res.statusCode).toBe(403)
     })
 
     // =========================
@@ -173,7 +192,7 @@ describe('Usuários - Regras de Negócio', () => {
         expect([200, 400]).toContain(res.statusCode)
 
         if (res.statusCode === 400) {
-            expect(res.body).toHaveProperty('possuiRelacionamentos')
+            expect(res.body).toHaveProperty('usuarioTemVinculos')
         }
     })
 
