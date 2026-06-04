@@ -50,29 +50,68 @@ export const login = async (req, res) => {
     try {
         const { email, password } = req.body
 
-        // validação básica
-        if (!email || !password) {
-        return res.status(400).json({ erro: 'Email e senha são obrigatórios' })
+        // CAMPOS OBRIGATÓRIOS
+        if (!email && !password) {
+            return res.status(400).json({
+                erro: 'Email e senha são obrigatórios'
+            })
         }
 
-        // login no Supabase
+        if (!email) {
+            return res.status(400).json({
+                erro: 'Email é obrigatório'
+            })
+        }
+
+        if (!password) {
+            return res.status(400).json({
+                erro: 'Senha é obrigatória'
+            })
+        }
+
+        // VERIFICA SE O EMAIL EXISTE NO SISTEMA
+        const { data: usuarioExistente } = await supabase
+            .from('usuarios')
+            .select('*')
+            .eq('email', email)
+            .single()
+
+        if (!usuarioExistente) {
+            return res.status(404).json({
+                erro: 'Email não cadastrado no sistema'
+            })
+        }
+
+        // LOGIN SUPABASE
         const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
+            email,
+            password
         })
 
+        // SENHA INCORRETA
         if (error) {
-        return res.status(401).json({ erro: 'Credenciais inválidas' })
+            return res.status(401).json({
+                erro: 'Senha incorreta'
+            })
         }
 
-        // retorna token + dados do usuário
+        // USUÁRIO INATIVO
+        if (!usuarioExistente.ativo) {
+            return res.status(403).json({
+                erro: 'Usuário inativo'
+            })
+        }
+
         return res.json({
-        access_token: data.session.access_token,
-        user: data.user
+            access_token: data.session.access_token,
+            user: usuarioExistente
         })
 
     } catch (err) {
         console.error('Erro no login:', err)
-        return res.status(500).json({ erro: 'Erro ao realizar login' })
+
+        return res.status(500).json({
+            erro: 'Erro ao realizar login'
+        })
     }
 }

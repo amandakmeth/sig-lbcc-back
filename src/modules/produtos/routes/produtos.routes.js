@@ -1,67 +1,65 @@
 import express from 'express'
+
 import {
-    getUsuarios,
-    getUsuarioById,
-    createUsuario,
-    updateUsuario,
-    deleteUsuario,
-    toggleStatusUsuario,
-    verificarRelacionamentosUsuario
-} from '../controllers/usuarios.controller.js'
+    getProdutos,
+    getProdutoById,
+    createProduto,
+    updateProduto,
+    deleteProduto,
+    toggleStatusProduto,
+    verificarRelacionamentosProduto
+} from '../controller/produtos.controller.js'
 
 import { authMiddleware } from '../../auth/middlewares/auth.middleware.js'
 
 const router = express.Router()
 
+// ROTAS PROTEGIDAS
 router.use(authMiddleware)
 
 /**
  * @swagger
- * /usuarios:
+ * /produtos:
  *   get:
- *     summary: Listar usuários
- *     tags: [Usuários]
+ *     summary: Listar produtos
+ *     tags: [Produtos]
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: Lista de usuários
- *       403:
- *         description: Sem permissão
+ *         description: Lista de produtos
  */
-router.get('/', getUsuarios)
+router.get('/', getProdutos)
 
 /**
  * @swagger
- * /usuarios/{id}:
+ * /produtos/{id}:
  *   get:
- *     summary: Buscar usuário por ID
- *     tags: [Usuários]
+ *     summary: Buscar produto por ID
+ *     tags: [Produtos]
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
- *         description: ID do usuário
+ *         description: ID do produto
  *         schema:
  *           type: string
  *     responses:
  *       200:
- *         description: Usuário encontrado
- *       403:
- *         description: Acesso negado
+ *         description: Produto encontrado
  *       404:
- *         description: Usuário não encontrado
+ *         description: Produto não encontrado
  */
-router.get('/:id', getUsuarioById)
+router.get('/:id', getProdutoById)
 
 /**
  * @swagger
- * /usuarios:
+ * /produtos:
  *   post:
- *     summary: Criar novo usuário
- *     tags: [Usuários]
+ *     summary: Criar produto
+ *     tags: [Produtos]
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -72,73 +70,66 @@ router.get('/:id', getUsuarioById)
  *             type: object
  *             required:
  *               - nome
- *               - email
- *               - senha
+ *               - unidade
  *             properties:
  *               nome:
  *                 type: string
- *                 example: João da Silva
- *               email:
+ *                 example: Cadeira de rodas
+ *               descricao:
  *                 type: string
- *                 example: joao@email.com
- *               perfil:
+ *                 example: Equipamento de mobilidade
+ *               unidade:
  *                 type: string
- *                 example: operador
- *               senha:
- *                 type: string
- *                 example: 123456
+ *                 example: UN
  *     responses:
  *       201:
- *         description: Usuário criado com sucesso
- *       403:
- *         description: Apenas gestor pode criar usuários
+ *         description: Produto criado com sucesso
  *       400:
  *         description: Dados inválidos
  */
-router.post('/', createUsuario)
+router.post('/', createProduto)
 
 /**
  * @swagger
- * /usuarios/{id}:
+ * /produtos/{id}:
  *   put:
- *     summary: Atualizar usuário
- *     tags: [Usuários]
+ *     summary: Atualizar produto
+ *     tags: [Produtos]
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
- *         description: ID do usuário
+ *         description: ID do produto
  *         schema:
  *           type: string
  *     requestBody:
  *       content:
  *         application/json:
  *           example:
- *             nome: Novo Nome
- *             email: novo@email.com
+ *             nome: Produto atualizado
+ *             descricao: Nova descrição
+ *             unidade: CX
  *     responses:
  *       200:
- *         description: Usuário atualizado
- *       403:
- *         description: Acesso negado
+ *         description: Produto atualizado
  */
-router.put('/:id', updateUsuario)
+router.put('/:id', updateProduto)
 
 /**
  * @swagger
- * /usuarios/{id}/status:
+ * /produtos/{id}/status:
  *   patch:
- *     summary: Ativar ou inativar usuário
- *     tags: [Usuários]
+ *     summary: Ativar ou inativar produto
+ *     tags: [Produtos]
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
- *         description: ID do usuário
+ *         description: ID do produto
  *         schema:
  *           type: string
  *     requestBody:
@@ -157,21 +148,21 @@ router.put('/:id', updateUsuario)
  *       403:
  *         description: Apenas gestor pode alterar status
  */
-router.patch('/:id/status', toggleStatusUsuario)
+router.patch('/:id/status', toggleStatusProduto)
 
 /**
  * @swagger
- * /usuarios/{id}/relacionamentos:
+ * /produtos/{id}/relacionamentos:
  *   get:
- *     summary: Verificar relacionamentos do usuário
- *     tags: [Usuários]
+ *     summary: Verificar relacionamentos do produto
+ *     tags: [Produtos]
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
- *         description: ID do usuário
+ *         description: ID do produto
  *         schema:
  *           type: string
  *     responses:
@@ -182,32 +173,32 @@ router.patch('/:id/status', toggleStatusUsuario)
  */
 router.get(
     '/:id/relacionamentos',
-    verificarRelacionamentosUsuario
+    verificarRelacionamentosProduto
 )
 
 /**
  * @swagger
- * /usuarios/{id}:
+ * /produtos/{id}:
  *   delete:
- *     summary: Excluir usuário definitivamente
- *     tags: [Usuários]
+ *     summary: Excluir produto definitivamente
+ *     tags: [Produtos]
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
- *         description: ID do usuário
+ *         description: ID do produto
  *         schema:
  *           type: string
  *     responses:
  *       200:
- *         description: Usuário excluído
+ *         description: Produto excluído
  *       400:
- *         description: Usuário possui vínculos
+ *         description: Produto possui vínculos
  *       403:
  *         description: Apenas gestor pode excluir
  */
-router.delete('/:id', deleteUsuario)
+router.delete('/:id', deleteProduto)
 
 export default router
