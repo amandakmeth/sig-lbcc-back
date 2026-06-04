@@ -8,7 +8,7 @@ import pacientesRoutes from '../modules/pacientes/routes/pacientes.routes.js'
 import pacienteDocumentosRoutes from '../modules/paciente_documentos/routes/paciente_documentos.routes.js'
 import fornecedoresRoutes from '../modules/fornecedores/routes/fornecedores.route.js'
 import cotacoesRoutes from '../modules/cotacoes/routes/cotacoes.routes.js'
-
+import cotacaoItensRoutes from '../modules/cotacao-itens/routes/cotacaoItens.routes.js'
 
 const router = express.Router()
 
@@ -22,7 +22,7 @@ router.use('/produtos', produtosRoutes)
 router.use('/pacientes', pacientesRoutes)
 router.use('/fornecedores',fornecedoresRoutes)
 router.use('/cotacoes',cotacoesRoutes)
-
+router.use('/cotacao-itens', cotacaoItensRoutes)
 //Documentos (usa rotas próprias internas)
 router.use(pacienteDocumentosRoutes)
 
