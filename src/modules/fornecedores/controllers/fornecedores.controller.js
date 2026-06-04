@@ -12,9 +12,10 @@ import {
 // LISTAR FORNECEDORES
 // =========================
 export const getFornecedores = async (req, res) => {
+
     try {
 
-        const { data: fornecedores, error } =
+        const { data, error } =
             await listarFornecedores()
 
         if (error) {
@@ -26,9 +27,12 @@ export const getFornecedores = async (req, res) => {
         const fornecedoresComVinculos =
             await Promise.all(
 
-                fornecedores.map(async (fornecedor) => {
+                data.map(async (fornecedor) => {
 
-                    const { data, error: relError } =
+                    const {
+                        data: rel,
+                        error: relError
+                    } =
                         await verificarRelacionamentosFornecedorService(
                             fornecedor.id
                         )
@@ -38,17 +42,20 @@ export const getFornecedores = async (req, res) => {
                         fornecedorTemVinculos:
                             relError
                                 ? false
-                                : (data?.possuiRelacionamentos ?? false)
+                                : (rel?.possuiRelacionamentos ?? false)
                     }
                 })
             )
 
-        return res.json(fornecedoresComVinculos)
+        return res.json(
+            fornecedoresComVinculos
+        )
 
     } catch (err) {
 
         return res.status(500).json({
-            erro: 'Erro ao listar fornecedores'
+            erro:
+                'Erro ao listar fornecedores'
         })
     }
 }
@@ -57,6 +64,7 @@ export const getFornecedores = async (req, res) => {
 // BUSCAR FORNECEDOR POR ID
 // =========================
 export const getFornecedorById = async (req, res) => {
+
     try {
 
         const { id } = req.params
@@ -84,11 +92,13 @@ export const getFornecedorById = async (req, res) => {
 // CRIAR FORNECEDOR
 // =========================
 export const createFornecedor = async (req, res) => {
+
     try {
 
         if (req.user.perfil !== 'gestor') {
             return res.status(403).json({
-                erro: 'Apenas gestor pode criar fornecedores'
+                erro:
+                    'Apenas gestor pode criar fornecedores'
             })
         }
 
@@ -96,7 +106,8 @@ export const createFornecedor = async (req, res) => {
 
         if (!razao_social) {
             return res.status(400).json({
-                erro: 'Razão social é obrigatória'
+                erro:
+                    'Razão social é obrigatória'
             })
         }
 
@@ -123,11 +134,13 @@ export const createFornecedor = async (req, res) => {
 // ATUALIZAR FORNECEDOR
 // =========================
 export const updateFornecedor = async (req, res) => {
+
     try {
 
         if (req.user.perfil !== 'gestor') {
             return res.status(403).json({
-                erro: 'Apenas gestor pode atualizar fornecedores'
+                erro:
+                    'Apenas gestor pode atualizar fornecedores'
             })
         }
 
@@ -150,7 +163,8 @@ export const updateFornecedor = async (req, res) => {
     } catch (err) {
 
         return res.status(500).json({
-            erro: 'Erro ao atualizar fornecedor'
+            erro:
+                'Erro ao atualizar fornecedor'
         })
     }
 }
@@ -158,35 +172,45 @@ export const updateFornecedor = async (req, res) => {
 // =========================
 // ATIVAR / INATIVAR
 // =========================
-export const toggleStatusFornecedor = async (req, res) => {
-    try {
+export const toggleStatusFornecedor =
+    async (req, res) => {
 
-        if (req.user.perfil !== 'gestor') {
-            return res.status(403).json({
-                erro: 'Apenas gestor pode alterar status'
+        try {
+
+            if (
+                req.user.perfil !== 'gestor'
+            ) {
+                return res.status(403).json({
+                    erro:
+                        'Apenas gestor pode alterar status'
+                })
+            }
+
+            const { id } = req.params
+
+            const { data, error } =
+                await alterarStatusFornecedor(id)
+
+            if (error) {
+                return res.status(400).json({
+                    erro: error.message
+                })
+            }
+
+            return res.status(200).json({
+                message:
+                    'Status alterado com sucesso',
+                data
             })
-        }
 
-        const { id } = req.params
+        } catch (err) {
 
-        const { data, error } =
-            await alterarStatusFornecedor(id)
-
-        if (error) {
             return res.status(500).json({
-                erro: error.message
+                erro:
+                    'Erro ao alterar status'
             })
         }
-
-        return res.json(data)
-
-    } catch (err) {
-
-        return res.status(500).json({
-            erro: 'Erro ao alterar status do fornecedor'
-        })
     }
-}
 
 // =========================
 // VERIFICAR RELACIONAMENTOS
@@ -194,35 +218,37 @@ export const toggleStatusFornecedor = async (req, res) => {
 export const verificarRelacionamentosFornecedor =
     async (req, res) => {
 
-    try {
+        try {
 
-        if (req.user.perfil !== 'gestor') {
-            return res.status(403).json({
-                erro: 'Sem permissão'
-            })
-        }
+            if (req.user.perfil !== 'gestor') {
+                return res.status(403).json({
+                    erro: 'Sem permissão'
+                })
+            }
 
-        const { id } = req.params
+            const { id } = req.params
 
-        const { data, error } =
-            await verificarRelacionamentosFornecedorService(id)
+            const { data, error } =
+                await verificarRelacionamentosFornecedorService(
+                    id
+                )
 
-        if (error) {
+            if (error) {
+                return res.status(500).json({
+                    erro: error.message
+                })
+            }
+
+            return res.json(data)
+
+        } catch (err) {
+
             return res.status(500).json({
-                erro: error.message
+                erro:
+                    'Erro ao verificar relacionamentos'
             })
         }
-
-        return res.json(data)
-
-    } catch (err) {
-
-        return res.status(500).json({
-            erro:
-                'Erro ao verificar relacionamentos'
-        })
     }
-}
 
 // =========================
 // EXCLUIR FORNECEDOR
@@ -233,7 +259,8 @@ export const deleteFornecedor = async (req, res) => {
 
         if (req.user.perfil !== 'gestor') {
             return res.status(403).json({
-                erro: 'Apenas gestor pode excluir fornecedores'
+                erro:
+                    'Apenas gestor pode excluir fornecedores'
             })
         }
 
@@ -254,11 +281,12 @@ export const deleteFornecedor = async (req, res) => {
         }
 
         if (
-            relacionamentos.possuiRelacionamentos
+            relacionamentos?.possuiRelacionamentos
         ) {
 
             return res.status(400).json({
-                erro: 'Fornecedor possui vínculos',
+                erro:
+                    'Fornecedor possui vínculos',
                 fornecedorTemVinculos: true,
                 relacionamentos:
                     relacionamentos.relacionamentos
@@ -275,13 +303,15 @@ export const deleteFornecedor = async (req, res) => {
         }
 
         return res.status(200).json({
-            message: 'Fornecedor excluído com sucesso'
+            message:
+                'Fornecedor excluído com sucesso'
         })
 
     } catch (err) {
 
         return res.status(500).json({
-            erro: 'Erro ao excluir fornecedor'
+            erro:
+                'Erro ao excluir fornecedor'
         })
     }
 }
