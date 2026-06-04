@@ -6,6 +6,7 @@ import areasRoutes from '../modules/areas/routes/areas.routes.js'
 import produtosRoutes from '../modules/produtos/routes/produtos.routes.js'
 import pacientesRoutes from '../modules/pacientes/routes/pacientes.routes.js'
 import pacienteDocumentosRoutes from '../modules/paciente_documentos/routes/paciente_documentos.routes.js'
+import fornecedoresRoutes from '../modules/fornecedores/routes/fornecedores.route.js'
 
 const router = express.Router()
 
@@ -17,6 +18,7 @@ router.use('/usuarios', usuariosRoutes)
 router.use('/areas', areasRoutes)
 router.use('/produtos', produtosRoutes)
 router.use('/pacientes', pacientesRoutes)
+router.use('/fornecedores',fornecedoresRoutes)
 
 //Documentos (usa rotas próprias internas)
 router.use(pacienteDocumentosRoutes)
