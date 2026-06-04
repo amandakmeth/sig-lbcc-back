@@ -35,7 +35,6 @@ export const buscarFornecedorPorId =
 export const inserirFornecedor =
     async (dados) => {
 
-    // VALIDA CNPJ DUPLICADO
     if (dados.cnpj) {
 
         const { data: existe } =
@@ -84,7 +83,7 @@ export const atualizarFornecedor =
         }
     }
 
-    // VALIDA CNPJ DUPLICADO
+    // valida CNPJ caso seja enviado
     if (dados.cnpj) {
 
         const { data: existe } =
@@ -106,13 +105,30 @@ export const atualizarFornecedor =
         }
     }
 
+    const dadosAtualizacao = {}
+
+    if (dados.nome_fantasia !== undefined) {
+        dadosAtualizacao.nome_fantasia =
+            dados.nome_fantasia
+    }
+
+    if (dados.telefone !== undefined) {
+        dadosAtualizacao.telefone =
+            dados.telefone
+    }
+
+    if (dados.email !== undefined) {
+        dadosAtualizacao.email =
+            dados.email
+    }
+
+    dadosAtualizacao.updated_at =
+        new Date()
+
     const { data, error } =
         await supabase
             .from('fornecedores')
-            .update({
-                ...dados,
-                updated_at: new Date()
-            })
+            .update(dadosAtualizacao)
             .eq('id', id)
             .select()
 
@@ -128,15 +144,20 @@ export const alterarStatusFornecedor =
     const {
         data: fornecedor,
         error: buscaError
-    } = await supabase
-        .from('fornecedores')
-        .select('ativo')
-        .eq('id', id)
-        .single()
+    } =
+        await supabase
+            .from('fornecedores')
+            .select('ativo')
+            .eq('id', id)
+            .single()
 
-    if (buscaError) {
+    if (buscaError || !fornecedor) {
+
         return {
-            error: buscaError
+            error: {
+                message:
+                    'Fornecedor não encontrado'
+            }
         }
     }
 
@@ -149,6 +170,7 @@ export const alterarStatusFornecedor =
             })
             .eq('id', id)
             .select()
+            .single()
 
     return { data, error }
 }
@@ -159,17 +181,17 @@ export const alterarStatusFornecedor =
 export const verificarRelacionamentosFornecedorService =
     async (id) => {
 
-    const { count, error } =
+    const {
+        count: propostas,
+        error
+    } =
         await supabase
-            .from('cotacoes')
+            .from('cotacao_propostas')
             .select('*', {
                 count: 'exact',
                 head: true
             })
-            .eq(
-                'fornecedor_vencedor_id',
-                id
-            )
+            .eq('fornecedor_id', id)
 
     if (error) {
         return { error }
@@ -178,9 +200,10 @@ export const verificarRelacionamentosFornecedorService =
     return {
         data: {
             possuiRelacionamentos:
-                count > 0,
+                propostas > 0,
+
             relacionamentos: {
-                cotacoes: count
+                propostas
             }
         }
     }
@@ -191,6 +214,22 @@ export const verificarRelacionamentosFornecedorService =
 // =========================
 export const deletarFornecedor =
     async (id) => {
+
+    const {
+        data: fornecedor,
+        error: buscaError
+    } =
+        await buscarFornecedorPorId(id)
+
+    if (buscaError || !fornecedor) {
+
+        return {
+            error: {
+                message:
+                    'Fornecedor não encontrado'
+            }
+        }
+    }
 
     const { data, error } =
         await supabase

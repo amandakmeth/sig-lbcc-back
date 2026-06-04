@@ -19,6 +19,13 @@ router.use(authMiddleware)
 
 /**
  * @swagger
+ * tags:
+ *   name: Fornecedores
+ *   description: Gestão de fornecedores
+ */
+
+/**
+ * @swagger
  * /fornecedores:
  *   get:
  *     summary: Listar fornecedores
@@ -30,29 +37,6 @@ router.use(authMiddleware)
  *         description: Lista de fornecedores
  */
 router.get('/', getFornecedores)
-
-/**
- * @swagger
- * /fornecedores/{id}:
- *   get:
- *     summary: Buscar fornecedor por ID
- *     tags: [Fornecedores]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         description: ID do fornecedor
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Fornecedor encontrado
- *       404:
- *         description: Fornecedor não encontrado
- */
-router.get('/:id', getFornecedorById)
 
 /**
  * @swagger
@@ -92,9 +76,32 @@ router.get('/:id', getFornecedorById)
  *       400:
  *         description: Dados inválidos
  *       403:
- *         description: Apenas gestor pode criar
+ *         description: Sem permissão
  */
 router.post('/', createFornecedor)
+
+/**
+ * @swagger
+ * /fornecedores/{id}:
+ *   get:
+ *     summary: Buscar fornecedor por ID
+ *     tags: [Fornecedores]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID do fornecedor
+ *     responses:
+ *       200:
+ *         description: Fornecedor encontrado
+ *       404:
+ *         description: Fornecedor não encontrado
+ */
+router.get('/:id', getFornecedorById)
 
 /**
  * @swagger
@@ -108,10 +115,10 @@ router.post('/', createFornecedor)
  *       - in: path
  *         name: id
  *         required: true
- *         description: ID do fornecedor
  *         schema:
  *           type: string
  *     requestBody:
+ *       required: false
  *       content:
  *         application/json:
  *           example:
@@ -136,14 +143,13 @@ router.put('/:id', updateFornecedor)
  *       - in: path
  *         name: id
  *         required: true
- *         description: ID do fornecedor
  *         schema:
  *           type: string
  *     responses:
  *       200:
  *         description: Status alterado com sucesso
  *       403:
- *         description: Apenas gestor pode alterar status
+ *         description: Sem permissão
  */
 router.patch('/:id/status', toggleStatusFornecedor)
 
@@ -159,7 +165,6 @@ router.patch('/:id/status', toggleStatusFornecedor)
  *       - in: path
  *         name: id
  *         required: true
- *         description: ID do fornecedor
  *         schema:
  *           type: string
  *     responses:
@@ -168,16 +173,13 @@ router.patch('/:id/status', toggleStatusFornecedor)
  *       403:
  *         description: Sem permissão
  */
-router.get(
-    '/:id/relacionamentos',
-    verificarRelacionamentosFornecedor
-)
+router.get('/:id/relacionamentos', verificarRelacionamentosFornecedor)
 
 /**
  * @swagger
  * /fornecedores/{id}:
  *   delete:
- *     summary: Excluir fornecedor definitivamente
+ *     summary: Excluir fornecedor
  *     tags: [Fornecedores]
  *     security:
  *       - bearerAuth: []
@@ -185,7 +187,6 @@ router.get(
  *       - in: path
  *         name: id
  *         required: true
- *         description: ID do fornecedor
  *         schema:
  *           type: string
  *     responses:
@@ -194,7 +195,7 @@ router.get(
  *       400:
  *         description: Fornecedor possui vínculos
  *       403:
- *         description: Apenas gestor pode excluir
+ *         description: Sem permissão
  */
 router.delete('/:id', deleteFornecedor)
 
