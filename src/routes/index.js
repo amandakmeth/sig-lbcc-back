@@ -8,7 +8,10 @@ import pacientesRoutes from '../modules/pacientes/routes/pacientes.routes.js'
 import pacienteDocumentosRoutes from '../modules/paciente_documentos/routes/paciente_documentos.routes.js'
 import fornecedoresRoutes from '../modules/fornecedores/routes/fornecedores.route.js'
 import cotacoesRoutes from '../modules/cotacoes/routes/cotacoes.routes.js'
-import cotacaoItensRoutes from '../modules/cotacao-itens/routes/cotacaoItens.routes.js'
+import cotacaoItensRoutes from '../modules/cotacoesItem/routes/cotacaoItens.routes.js'
+import atendimentosRoutes from '../modules/atendimentos/routes/atendimentos.routes.js'
+import historicoPacientesRoutes from '../modules/historico_pacientes/routes/historico.routes.js'
+
 
 const router = express.Router()
 
@@ -23,6 +26,8 @@ router.use('/pacientes', pacientesRoutes)
 router.use('/fornecedores',fornecedoresRoutes)
 router.use('/cotacoes',cotacoesRoutes)
 router.use('/cotacao-itens', cotacaoItensRoutes)
+router.use('/atendimentos', atendimentosRoutes)
+router.use('/historico-pacientes', historicoPacientesRoutes)
 //Documentos (usa rotas próprias internas)
 router.use(pacienteDocumentosRoutes)
 
