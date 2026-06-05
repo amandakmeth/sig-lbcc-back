@@ -19,6 +19,13 @@ router.use(authMiddleware)
 
 /**
  * @swagger
+ * tags:
+ *   name: Pacientes
+ *   description: Gestão de pacientes
+ */
+
+/**
+ * @swagger
  * /pacientes:
  *   get:
  *     summary: Listar pacientes
@@ -143,7 +150,8 @@ router.put('/:id', updatePaciente)
  * @swagger
  * /pacientes/{id}/status:
  *   patch:
- *     summary: Ativar ou inativar paciente
+ *     summary: Atualizar status do paciente
+ *     description: Conforme RF_F2, permite classificar e alterar o status do paciente (ativo, suspenso ou encerrado) com registro automático no histórico.
  *     tags: [Pacientes]
  *     security:
  *       - bearerAuth: []
@@ -163,10 +171,17 @@ router.put('/:id', updatePaciente)
  *             properties:
  *               status:
  *                 type: string
- *                 example: inativo
+ *                 enum: [ativo, suspenso, encerrado]
+ *                 example: suspenso
  *     responses:
  *       200:
  *         description: Status alterado com sucesso
+ *       400:
+ *         description: Status inválido
+ *       403:
+ *         description: Apenas gestor pode alterar
+ *       404:
+ *         description: Paciente não encontrado
  */
 router.patch('/:id/status', toggleStatusPaciente)
 
@@ -189,10 +204,7 @@ router.patch('/:id/status', toggleStatusPaciente)
  *       200:
  *         description: Relacionamentos verificados
  */
-router.get(
-    '/:id/relacionamentos',
-    verificarRelacionamentosPaciente
-)
+router.get('/:id/relacionamentos', verificarRelacionamentosPaciente)
 
 /**
  * @swagger
