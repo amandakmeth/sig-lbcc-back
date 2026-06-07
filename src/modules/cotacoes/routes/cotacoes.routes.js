@@ -7,7 +7,8 @@ import {
     updateCotacao,
     toggleStatusCotacao,
     deleteCotacao,
-    verificarRelacionamentosCotacao
+    verificarRelacionamentosCotacao,
+    alterarValidade
 } from '../controllers/cotacoes.controller.js';
 
 import { authMiddleware } from '../../auth/middlewares/auth.middleware.js';
@@ -253,5 +254,5 @@ router.delete('/:id', deleteCotacao);
  *         description: Erro interno
  */
 router.get('/:id/relacionamentos', verificarRelacionamentosCotacao);
-
+router.delete('/:id', deleteCotacao);
 export default router;

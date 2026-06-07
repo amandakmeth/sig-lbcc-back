@@ -5,7 +5,7 @@ import {
     buscarDocumentoPorId,
     uploadArquivo
 } from '../services/paciente_documentos.service.js'
-
+import { registrarOcorrencia } from '../../historico_pacientes/services/auditoria.service.js'
 // =========================
 // LISTAR DOCUMENTOS POR PACIENTE
 // =========================
@@ -82,7 +82,13 @@ export const createDocumento = async (req, res) => {
         if (error) {
             return res.status(400).json({ erro: error.message || error })
         }
-
+await registrarOcorrencia({
+    paciente_id: id,
+    usuario_id: req.user.id,
+    tipo_evento: 'DOCUMENTO_ANEXADO',
+    descricao: `Documento anexado: ${req.file.originalname}`,
+    referencia_id: data?.[0]?.id || data?.id || null
+})
         res.status(201).json(data)
     } catch (err) {
         console.error(err)
@@ -102,7 +108,24 @@ export const deleteDocumento = async (req, res) => {
             return res.status(403).json({ erro: 'Sem permissão' })
         }
 
-        const { error } = await deletarDocumento(id)
+       const { data: documento } =
+    await buscarDocumentoPorId(id)
+
+if (!documento) {
+    return res.status(404).json({
+        erro: 'Documento não encontrado'
+    })
+}
+
+await registrarOcorrencia({
+    paciente_id: documento.paciente_id,
+    usuario_id: req.user.id,
+    tipo_evento: 'DOCUMENTO_REMOVIDO',
+    descricao: `Documento removido: ${documento.nome}`,
+    referencia_id: documento.id
+})
+
+const { error } = await deletarDocumento(id)
 
         if (error) {
             return res.status(500).json({ erro: error.message })

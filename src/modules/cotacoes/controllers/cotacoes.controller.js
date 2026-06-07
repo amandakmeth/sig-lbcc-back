@@ -4,10 +4,11 @@ import {
     inserirCotacao,
     atualizarCotacao,
     alterarStatusCotacao,
+    alterarValidadeCotacao,
     verificarRelacionamentosCotacaoService,
-    deletarCotacao
+    deletarCotacao,
 } from '../services/cotacoes.service.js';
-
+import { registrarOcorrencia } from '../../historico_pacientes/services/auditoria.service.js';
 // =========================
 // LISTAR COTAÇÕES
 // =========================
@@ -80,24 +81,41 @@ export const createCotacao = async (req, res) => {
             data_validade
         } = req.body;
 
-        if (!descricao || !data_validade) {
-            return res.status(400).json({
-                erro: 'Descrição e data de validade são obrigatórias'
-            });
-        }
+      const {
+    descricao,
+    data_validade,
+    paciente_id
+} = req.body;
 
-        const { data, error } = await inserirCotacao({
-            ...req.body,
-            created_by: req.user.id
-        });
+if (
+    !descricao ||
+    !data_validade ||
+    !paciente_id
+) {
+    return res.status(400).json({
+        erro: 'Descrição, data de validade e paciente são obrigatórios'
+    });
+}
+     const { data, error } = await inserirCotacao({
+    ...req.body,
+    created_by: req.user.id
+});
 
-        if (error) {
-            return res.status(400).json({
-                erro: error.message || error
-            });
-        }
+if (error) {
+    return res.status(400).json({
+        erro: error.message || error
+    });
+}
 
-        return res.status(201).json(data);
+await registrarOcorrencia({
+    paciente_id: data.paciente_id,
+    usuario_id: req.user.id,
+    tipo_evento: 'COTACAO_CRIADA',
+    descricao: `Cotação criada: ${data.descricao}`,
+    referencia_id: data.id
+});
+
+return res.status(201).json(data);
 
     } catch (err) {
 
@@ -130,13 +148,21 @@ export const updateCotacao = async (req, res) => {
             }
         );
 
-        if (error) {
-            return res.status(400).json({
-                erro: error.message || error
-            });
-        }
+     if (error) {
+    return res.status(400).json({
+        erro: error.message || error
+    });
+}
 
-        return res.json(data);
+await registrarOcorrencia({
+    paciente_id: data.paciente_id,
+    usuario_id: req.user.id,
+    tipo_evento: 'COTACAO_EDITADA',
+    descricao: 'Cotação atualizada',
+    referencia_id: data.id
+});
+
+return res.json(data);
 
     } catch (err) {
 
@@ -163,17 +189,26 @@ export const toggleStatusCotacao = async (req, res) => {
 
         const { data, error } = await alterarStatusCotacao(id);
 
-        if (error) {
-            return res.status(400).json({
-                erro: error.message
-            });
-        }
+  if (error) {
+    return res.status(400).json({
+        erro: error.message
+    });
+}
 
-        return res.status(200).json({
-            message: 'Status alterado com sucesso',
-            data
-        });
+await registrarOcorrencia({
+    paciente_id: data.paciente_id,
+    usuario_id: req.user.id,
+    tipo_evento: 'ALTERACAO_STATUS',
+    descricao: `Status alterado para ${
+        data.ativo ? 'ATIVA' : 'INATIVA'
+    }`,
+    referencia_id: data.id
+});
 
+return res.status(200).json({
+    message: 'Status alterado com sucesso',
+    data
+});
     } catch (err) {
 
         return res.status(500).json({
@@ -215,7 +250,58 @@ export const verificarRelacionamentosCotacao = async (req, res) => {
         });
     }
 };
+// =========================
+// ALTERAR VALIDADE
+// =========================
+export const alterarValidade = async (
+    req,
+    res
+) => {
 
+    try {
+
+        if (req.user.perfil !== 'gestor') {
+            return res.status(403).json({
+                erro: 'Apenas gestor pode alterar validade'
+            });
+        }
+
+        const { id } = req.params;
+        const { status } = req.body;
+
+        const { data, error } =
+            await alterarValidadeCotacao(
+                id,
+                status,
+                req.user.id
+            );
+
+        if (error) {
+            return res.status(400).json({
+                erro: error.message
+            });
+        }
+
+        await registrarOcorrencia({
+            paciente_id: data.paciente_id,
+            usuario_id: req.user.id,
+            tipo_evento: 'ALTERACAO_STATUS',
+            descricao: `Cotação marcada como ${status.toUpperCase()}`,
+            referencia_id: data.id
+        });
+
+        return res.status(200).json({
+            message: 'Validade alterada com sucesso',
+            data
+        });
+
+    } catch (err) {
+
+        return res.status(500).json({
+            erro: 'Erro ao alterar validade'
+        });
+    }
+};
 // =========================
 // DELETE COM VALIDAÇÃO DE VÍNCULO
 // =========================
