@@ -3,27 +3,52 @@ import supabase from '../../../config/supabase.js';
 // =========================
 // LISTAR COTAÇÕES
 // =========================
-export const listarCotacoes = async (ativo = true) => {
+export const listarCotacoes = async (
+    ativo = true
+) => {
 
-    return await supabase
-        .from('cotacoes')
-        .select(`
-            *,
-            pacientes:paciente_id (
-                id,
-                nome
-            ),
-            areas:area_id (
-                id,
-                nome
-            )
-        `)
-        .eq('ativo', ativo)
-        .order('created_at', {
-            ascending: false
-        });
+    const { data, error } =
+        await supabase
+            .from('cotacoes')
+            .select(`
+                *,
+                pacientes:paciente_id (
+                    id,
+                    nome
+                ),
+                areas:area_id (
+                    id,
+                    nome
+                )
+            `)
+            .eq('ativo', ativo)
+            .order('created_at', {
+                ascending: false
+            });
+
+    if (error) {
+        return { data, error };
+    }
+
+    const hoje = new Date();
+
+    const cotacoes =
+        data.map(cotacao => ({
+
+            ...cotacao,
+
+            vencida:
+                new Date(
+                    cotacao.data_validade
+                ) < hoje
+
+        }));
+
+    return {
+        data: cotacoes,
+        error: null
+    };
 };
-
 // =========================
 // BUSCAR COTAÇÃO POR ID
 // =========================
@@ -51,13 +76,18 @@ export const buscarCotacaoPorId = async (id) => {
 // =========================
 export const inserirCotacao = async (dados) => {
 
-    if (!dados.descricao || !dados.data_validade) {
-        return {
-            error: {
-                message: 'Descrição e data de validade são obrigatórias'
-            }
-        };
-    }
+   if (
+    !dados.descricao ||
+    !dados.data_validade ||
+    !dados.paciente_id
+) {
+    return {
+        error: {
+            message:
+                'Descrição, data de validade e paciente são obrigatórios'
+        }
+    };
+}
 
     if (dados.numero) {
 
@@ -174,7 +204,42 @@ export const alterarStatusCotacao = async (id) => {
 
     return { data, error };
 };
+// =========================
+// ALTERAR VALIDADE DA COTAÇÃO
+// =========================
+export const alterarValidadeCotacao = async (
+    id,
+    status,
+    usuarioId
+) => {
 
+    const statusPermitidos = [
+        'valida',
+        'expirada'
+    ];
+
+    if (!statusPermitidos.includes(status)) {
+        return {
+            error: {
+                message: 'Status inválido'
+            }
+        };
+    }
+
+    const { data, error } =
+        await supabase
+            .from('cotacoes')
+            .update({
+                status,
+                updated_by: usuarioId,
+                updated_at: new Date()
+            })
+            .eq('id', id)
+            .select()
+            .single();
+
+    return { data, error };
+};
 // =========================
 // VERIFICAR RELACIONAMENTOS
 // =========================
