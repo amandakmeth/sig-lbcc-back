@@ -170,9 +170,72 @@ describe('Fornecedores - Regras de Negócio', () => {
     })
 
     // =========================
-    // DELETE (SOFT DELETE)
+    // PATCH STATUS (toggle)
     // =========================
-    it('gestor deve desativar fornecedor', async () => {
+    it('gestor deve alternar status do fornecedor via PATCH', async () => {
+
+        const criar = await request(app)
+            .post('/fornecedores')
+            .set('Authorization', `Bearer ${tokenGestor}`)
+            .send({
+                razao_social: `Fornecedor Status ${Date.now()}`
+            })
+
+        expect(criar.statusCode).toBe(201)
+
+        const criado = criar.body[0] || criar.body
+        const id = criado.id
+
+        expect(criado.ativo).toBe(true)
+
+        const inativar = await request(app)
+            .patch(`/fornecedores/${id}/status`)
+            .set('Authorization', `Bearer ${tokenGestor}`)
+
+        expect(inativar.statusCode).toBe(200)
+        expect(inativar.body.data.ativo).toBe(false)
+
+        const reativar = await request(app)
+            .patch(`/fornecedores/${id}/status`)
+            .set('Authorization', `Bearer ${tokenGestor}`)
+
+        expect(reativar.statusCode).toBe(200)
+        expect(reativar.body.data.ativo).toBe(true)
+    })
+
+    it('fornecedor inativo deve aparecer em GET /fornecedores', async () => {
+
+        const criar = await request(app)
+            .post('/fornecedores')
+            .set('Authorization', `Bearer ${tokenGestor}`)
+            .send({
+                razao_social: `Fornecedor Inativo ${Date.now()}`
+            })
+
+        const criado = criar.body[0] || criar.body
+
+        await request(app)
+            .patch(`/fornecedores/${criado.id}/status`)
+            .set('Authorization', `Bearer ${tokenGestor}`)
+
+        const listar = await request(app)
+            .get('/fornecedores')
+            .set('Authorization', `Bearer ${tokenGestor}`)
+
+        expect(listar.statusCode).toBe(200)
+
+        const encontrado = listar.body.find(
+            (f) => f.id === criado.id
+        )
+
+        expect(encontrado).toBeDefined()
+        expect(encontrado.ativo).toBe(false)
+    })
+
+    // =========================
+    // DELETE (hard delete)
+    // =========================
+    it('gestor deve excluir fornecedor sem vínculos', async () => {
 
         const res = await request(app)
             .delete(`/fornecedores/${fornecedorId}`)

@@ -3,14 +3,10 @@ import supabase from '../../../config/supabase.js'
 // =========================
 // LISTAR FORNECEDORES
 // =========================
-export const listarFornecedores = async (
-    ativo = true
-) => {
-
+export const listarFornecedores = async () => {
     return await supabase
         .from('fornecedores')
         .select('*')
-        .eq('ativo', ativo)
         .order('razao_social', {
             ascending: true
         })
