@@ -181,29 +181,42 @@ export const alterarStatusFornecedor =
 export const verificarRelacionamentosFornecedorService =
     async (id) => {
 
-    const {
-        count: propostas,
-        error
-    } =
-        await supabase
+    const [
+        { count: propostas, error: propostasError },
+        { count: itens, error: itensError }
+    ] = await Promise.all([
+        supabase
             .from('cotacao_propostas')
             .select('*', {
                 count: 'exact',
                 head: true
             })
+            .eq('fornecedor_id', id),
+        supabase
+            .from('cotacao_itens')
+            .select('*', {
+                count: 'exact',
+                head: true
+            })
             .eq('fornecedor_id', id)
+    ])
 
-    if (error) {
-        return { error }
+    if (propostasError) {
+        return { error: propostasError }
+    }
+
+    if (itensError) {
+        return { error: itensError }
     }
 
     return {
         data: {
             possuiRelacionamentos:
-                propostas > 0,
+                propostas > 0 || itens > 0,
 
             relacionamentos: {
-                propostas
+                propostas,
+                itens
             }
         }
     }
