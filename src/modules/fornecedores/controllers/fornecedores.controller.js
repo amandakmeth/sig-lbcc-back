@@ -8,6 +8,27 @@ import {
     verificarRelacionamentosFornecedorService
 } from '../services/fornecedores.service.js'
 
+const CAMPOS_FORNECEDOR = [
+    'razao_social',
+    'nome_fantasia',
+    'cnpj',
+    'telefone',
+    'email',
+    'ativo'
+]
+
+function extrairDadosFornecedor(body) {
+    const dados = {}
+
+    for (const campo of CAMPOS_FORNECEDOR) {
+        if (body[campo] !== undefined) {
+            dados[campo] = body[campo]
+        }
+    }
+
+    return dados
+}
+
 // =========================
 // LISTAR FORNECEDORES
 // =========================
@@ -111,8 +132,19 @@ export const createFornecedor = async (req, res) => {
             })
         }
 
+        const bruto = extrairDadosFornecedor(req.body)
+
+        const dados = {
+            razao_social: bruto.razao_social,
+            nome_fantasia: bruto.nome_fantasia ?? null,
+            cnpj: bruto.cnpj ?? null,
+            telefone: bruto.telefone ?? null,
+            email: bruto.email ?? null,
+            ativo: bruto.ativo ?? true
+        }
+
         const { data, error } =
-            await inserirFornecedor(req.body)
+            await inserirFornecedor(dados)
 
         if (error) {
             return res.status(400).json({
