@@ -7,7 +7,14 @@ export const listarItensCotacao = async (cotacaoId) => {
 
     return await supabase
         .from('cotacao_itens')
-        .select('*')
+        .select(`
+            *,
+            fornecedores:fornecedor_id (
+                id,
+                razao_social,
+                nome_fantasia
+            )
+        `)
         .eq('cotacao_id', cotacaoId)
         .order('ordem', {
             ascending: true
@@ -21,7 +28,14 @@ export const buscarItemPorId = async (id) => {
 
     return await supabase
         .from('cotacao_itens')
-        .select('*')
+        .select(`
+            *,
+            fornecedores:fornecedor_id (
+                id,
+                razao_social,
+                nome_fantasia
+            )
+        `)
         .eq('id', id)
         .single();
 };

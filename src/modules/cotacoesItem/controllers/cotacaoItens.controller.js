@@ -5,6 +5,48 @@ import {
     atualizarItemCotacao,
     deletarItemCotacao
 } from '../services/cotacaoItens.service.js';
+import { buscarFornecedorPorId } from '../../fornecedores/services/fornecedores.service.js';
+
+const CAMPOS_ITEM = [
+    'produto_id',
+    'descricao',
+    'quantidade',
+    'unidade',
+    'ordem',
+    'especificacoes',
+    'fornecedor_id'
+];
+
+function extrairDadosItem(body) {
+    const dados = {};
+
+    for (const campo of CAMPOS_ITEM) {
+        if (body[campo] !== undefined) {
+            dados[campo] = body[campo];
+        }
+    }
+
+    return dados;
+}
+
+async function validarFornecedor(fornecedorId) {
+    if (!fornecedorId) {
+        return 'fornecedor_id é obrigatório';
+    }
+
+    const { data: fornecedor, error } =
+        await buscarFornecedorPorId(fornecedorId);
+
+    if (error || !fornecedor) {
+        return 'Fornecedor não encontrado';
+    }
+
+    if (!fornecedor.ativo) {
+        return 'Fornecedor inativo';
+    }
+
+    return null;
+}
 
 // =========================
 // listar
@@ -79,12 +121,14 @@ export const createItemCotacao = async (
     try {
 
         const { cotacaoId } = req.params;
+        const dados = extrairDadosItem(req.body);
 
         const {
             descricao,
             quantidade,
-            unidade
-        } = req.body;
+            unidade,
+            fornecedor_id
+        } = dados;
 
         if (
             !descricao ||
@@ -97,9 +141,18 @@ export const createItemCotacao = async (
             });
         }
 
+        const erroFornecedor =
+            await validarFornecedor(fornecedor_id);
+
+        if (erroFornecedor) {
+            return res.status(400).json({
+                erro: erroFornecedor
+            });
+        }
+
         const { data, error } =
             await inserirItemCotacao({
-                ...req.body,
+                ...dados,
                 cotacao_id: cotacaoId
             });
 
@@ -130,11 +183,21 @@ export const updateItemCotacao = async (
     try {
 
         const { id } = req.params;
+        const dados = extrairDadosItem(req.body);
+
+        const erroFornecedor =
+            await validarFornecedor(dados.fornecedor_id);
+
+        if (erroFornecedor) {
+            return res.status(400).json({
+                erro: erroFornecedor
+            });
+        }
 
         const { data, error } =
             await atualizarItemCotacao(
                 id,
-                req.body
+                dados
             );
 
         if (error) {
