@@ -5,7 +5,6 @@ import {
     atualizarItemCotacao,
     deletarItemCotacao
 } from '../services/cotacaoItens.service.js';
-import { buscarFornecedorPorId } from '../../fornecedores/services/fornecedores.service.js';
 
 const CAMPOS_ITEM = [
     'produto_id',
@@ -13,43 +12,26 @@ const CAMPOS_ITEM = [
     'quantidade',
     'unidade',
     'ordem',
-    'especificacoes',
-    'fornecedor_id'
+    'especificacoes'
 ];
 
 function extrairDadosItem(body) {
+
     const dados = {};
 
     for (const campo of CAMPOS_ITEM) {
-        if (body[campo] !== undefined) {
+
+        if (body?.[campo] !== undefined) {
             dados[campo] = body[campo];
         }
+
     }
 
     return dados;
 }
 
-async function validarFornecedor(fornecedorId) {
-    if (!fornecedorId) {
-        return 'fornecedor_id é obrigatório';
-    }
-
-    const { data: fornecedor, error } =
-        await buscarFornecedorPorId(fornecedorId);
-
-    if (error || !fornecedor) {
-        return 'Fornecedor não encontrado';
-    }
-
-    if (!fornecedor.ativo) {
-        return 'Fornecedor inativo';
-    }
-
-    return null;
-}
-
 // =========================
-// listar
+// LISTAR ITENS DA COTAÇÃO
 // =========================
 export const getItensCotacao = async (
     req,
@@ -64,9 +46,11 @@ export const getItensCotacao = async (
             await listarItensCotacao(cotacaoId);
 
         if (error) {
+
             return res.status(500).json({
                 erro: error.message
             });
+
         }
 
         return res.json(data);
@@ -76,6 +60,7 @@ export const getItensCotacao = async (
         return res.status(500).json({
             erro: 'Erro ao listar itens'
         });
+
     }
 };
 
@@ -95,9 +80,11 @@ export const getItemById = async (
             await buscarItemPorId(id);
 
         if (error || !data) {
+
             return res.status(404).json({
                 erro: 'Item não encontrado'
             });
+
         }
 
         return res.json(data);
@@ -107,6 +94,7 @@ export const getItemById = async (
         return res.status(500).json({
             erro: 'Erro ao buscar item'
         });
+
     }
 };
 
@@ -121,33 +109,42 @@ export const createItemCotacao = async (
     try {
 
         const { cotacaoId } = req.params;
-        const dados = extrairDadosItem(req.body);
+
+        const dados =
+            extrairDadosItem(req.body);
 
         const {
             descricao,
             quantidade,
-            unidade,
-            fornecedor_id
+            unidade
         } = dados;
 
+        if (!descricao || !descricao.trim()) {
+
+            return res.status(400).json({
+                erro: 'Descrição é obrigatória'
+            });
+
+        }
+
         if (
-            !descricao ||
-            !quantidade ||
-            !unidade
+            quantidade === undefined ||
+            quantidade === null ||
+            Number(quantidade) <= 0
         ) {
 
             return res.status(400).json({
-                erro: 'Descrição, quantidade e unidade são obrigatórias'
+                erro: 'Quantidade deve ser maior que zero'
             });
+
         }
 
-        const erroFornecedor =
-            await validarFornecedor(fornecedor_id);
+        if (!unidade || !unidade.trim()) {
 
-        if (erroFornecedor) {
             return res.status(400).json({
-                erro: erroFornecedor
+                erro: 'Unidade é obrigatória'
             });
+
         }
 
         const { data, error } =
@@ -157,9 +154,11 @@ export const createItemCotacao = async (
             });
 
         if (error) {
+
             return res.status(400).json({
                 erro: error.message
             });
+
         }
 
         return res.status(201).json(data);
@@ -169,6 +168,7 @@ export const createItemCotacao = async (
         return res.status(500).json({
             erro: 'Erro ao criar item'
         });
+
     }
 };
 
@@ -183,15 +183,52 @@ export const updateItemCotacao = async (
     try {
 
         const { id } = req.params;
-        const dados = extrairDadosItem(req.body);
 
-        const erroFornecedor =
-            await validarFornecedor(dados.fornecedor_id);
+        const dados =
+            extrairDadosItem(req.body);
 
-        if (erroFornecedor) {
+        if (
+            dados.descricao !== undefined &&
+            !dados.descricao.trim()
+        ) {
+
             return res.status(400).json({
-                erro: erroFornecedor
+                erro: 'Descrição não pode ser vazia'
             });
+
+        }
+
+        if (
+            dados.quantidade !== undefined &&
+            (
+                dados.quantidade === null ||
+                Number(dados.quantidade) <= 0
+            )
+        ) {
+
+            return res.status(400).json({
+                erro: 'Quantidade deve ser maior que zero'
+            });
+
+        }
+
+        if (
+            dados.unidade !== undefined &&
+            !dados.unidade.trim()
+        ) {
+
+            return res.status(400).json({
+                erro: 'Unidade não pode ser vazia'
+            });
+
+        }
+
+        if (Object.keys(dados).length === 0) {
+
+            return res.status(400).json({
+                erro: 'Nenhum dado informado para atualização'
+            });
+
         }
 
         const { data, error } =
@@ -201,9 +238,11 @@ export const updateItemCotacao = async (
             );
 
         if (error) {
+
             return res.status(400).json({
                 erro: error.message
             });
+
         }
 
         return res.json(data);
@@ -213,6 +252,7 @@ export const updateItemCotacao = async (
         return res.status(500).json({
             erro: 'Erro ao atualizar item'
         });
+
     }
 };
 
@@ -232,9 +272,11 @@ export const deleteItemCotacao = async (
             await deletarItemCotacao(id);
 
         if (error) {
+
             return res.status(400).json({
                 erro: error.message
             });
+
         }
 
         return res.status(200).json({
@@ -246,5 +288,6 @@ export const deleteItemCotacao = async (
         return res.status(500).json({
             erro: 'Erro ao excluir item'
         });
+
     }
 };

@@ -88,7 +88,6 @@ router.get('/:id', getCotacaoById);
  *               - descricao
  *               - data_validade
  *               - paciente_id
- *               - area_id
  *             properties:
  *               descricao:
  *                 type: string
@@ -147,6 +146,8 @@ router.post('/', createCotacao);
  *               area_id:
  *                 type: string
  *                 format: uuid
+ *               status:
+ *                 type: string
  *     responses:
  *       200:
  *         description: Cotação atualizada
@@ -169,17 +170,6 @@ router.put('/:id', updateCotacao);
  *         schema:
  *           type: string
  *           format: uuid
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - ativo
- *             properties:
- *               ativo:
- *                 type: boolean
  *     responses:
  *       200:
  *         description: Status atualizado com sucesso
@@ -187,7 +177,77 @@ router.put('/:id', updateCotacao);
 router.patch('/:id/status', toggleStatusCotacao);
 
 // =========================
-// DELETE (HARD DELETE COM VALIDAÇÃO)
+// ALTERAR VALIDADE
+// =========================
+/**
+ * @swagger
+ * /cotacoes/{id}/validade:
+ *   patch:
+ *     summary: Altera a validade da cotação
+ *     tags: [Cotações]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - status
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 example: valida
+ *     responses:
+ *       200:
+ *         description: Validade alterada com sucesso
+ *       400:
+ *         description: Status inválido
+ *       403:
+ *         description: Sem permissão
+ */
+router.patch('/:id/validade', alterarValidade);
+
+// =========================
+// VERIFICAR RELACIONAMENTOS
+// =========================
+/**
+ * @swagger
+ * /cotacoes/{id}/relacionamentos:
+ *   get:
+ *     summary: Verificar relacionamentos da cotação
+ *     tags: [Cotações]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: ID da cotação
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Relacionamentos verificados com sucesso
+ *       403:
+ *         description: Sem permissão
+ *       500:
+ *         description: Erro interno
+ */
+router.get(
+    '/:id/relacionamentos',
+    verificarRelacionamentosCotacao
+);
+
+// =========================
+// DELETE
 // =========================
 /**
  * @swagger
@@ -212,47 +272,4 @@ router.patch('/:id/status', toggleStatusCotacao);
  */
 router.delete('/:id', deleteCotacao);
 
-// =========================
-// VERIFICAR RELACIONAMENTOS
-// =========================
-/**
- * @swagger
- * /cotacoes/{id}/relacionamentos:
- *   get:
- *     summary: Verificar relacionamentos da cotação
- *     tags: [Cotações]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         description: ID da cotação
- *         schema:
- *           type: string
- *           format: uuid
- *     responses:
- *       200:
- *         description: Relacionamentos verificados com sucesso
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 possuiRelacionamentos:
- *                   type: boolean
- *                 relacionamentos:
- *                   type: object
- *                   properties:
- *                     propostas:
- *                       type: integer
- *                     itens:
- *                       type: integer
- *       403:
- *         description: Sem permissão
- *       500:
- *         description: Erro interno
- */
-router.get('/:id/relacionamentos', verificarRelacionamentosCotacao);
-router.delete('/:id', deleteCotacao);
 export default router;

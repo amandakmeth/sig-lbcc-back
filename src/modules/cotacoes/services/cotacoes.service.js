@@ -32,23 +32,18 @@ export const listarCotacoes = async (
 
     const hoje = new Date();
 
-    const cotacoes =
-        data.map(cotacao => ({
-
-            ...cotacao,
-
-            vencida:
-                new Date(
-                    cotacao.data_validade
-                ) < hoje
-
-        }));
+    const cotacoes = data.map(cotacao => ({
+        ...cotacao,
+        vencida:
+            new Date(cotacao.data_validade) < hoje
+    }));
 
     return {
         data: cotacoes,
         error: null
     };
 };
+
 // =========================
 // BUSCAR COTAÇÃO POR ID
 // =========================
@@ -76,18 +71,18 @@ export const buscarCotacaoPorId = async (id) => {
 // =========================
 export const inserirCotacao = async (dados) => {
 
-   if (
-    !dados.descricao ||
-    !dados.data_validade ||
-    !dados.paciente_id
-) {
-    return {
-        error: {
-            message:
-                'Descrição, data de validade e paciente são obrigatórios'
-        }
-    };
-}
+    if (
+        !dados.descricao ||
+        !dados.data_validade ||
+        !dados.paciente_id
+    ) {
+        return {
+            error: {
+                message:
+                    'Descrição, data de validade e paciente são obrigatórios'
+            }
+        };
+    }
 
     if (dados.numero) {
 
@@ -99,7 +94,6 @@ export const inserirCotacao = async (dados) => {
                 .maybeSingle();
 
         if (existe) {
-
             return {
                 error: {
                     message: 'Número da cotação já existe'
@@ -123,11 +117,14 @@ export const inserirCotacao = async (dados) => {
 // =========================
 export const atualizarCotacao = async (id, dados) => {
 
-    if (!dados || Object.keys(dados).length === 0) {
-
+    if (
+        !dados ||
+        Object.keys(dados).length === 0
+    ) {
         return {
             error: {
-                message: 'Nenhum dado informado para atualização'
+                message:
+                    'Nenhum dado informado para atualização'
             }
         };
     }
@@ -139,26 +136,34 @@ export const atualizarCotacao = async (id, dados) => {
     }
 
     if (dados.data_validade !== undefined) {
-        dadosAtualizacao.data_validade = dados.data_validade;
+        dadosAtualizacao.data_validade =
+            dados.data_validade;
     }
 
     if (dados.observacoes !== undefined) {
-        dadosAtualizacao.observacoes = dados.observacoes;
+        dadosAtualizacao.observacoes =
+            dados.observacoes;
     }
 
     if (dados.paciente_id !== undefined) {
-        dadosAtualizacao.paciente_id = dados.paciente_id;
+        dadosAtualizacao.paciente_id =
+            dados.paciente_id;
     }
 
     if (dados.area_id !== undefined) {
-        dadosAtualizacao.area_id = dados.area_id;
+        dadosAtualizacao.area_id =
+            dados.area_id;
     }
 
     if (dados.status !== undefined) {
-        dadosAtualizacao.status = dados.status;
+        dadosAtualizacao.status =
+            dados.status;
     }
 
-    dadosAtualizacao.updated_at = new Date();
+    if (dados.updated_by !== undefined) {
+        dadosAtualizacao.updated_by =
+            dados.updated_by;
+    }
 
     const { data, error } =
         await supabase
@@ -172,7 +177,7 @@ export const atualizarCotacao = async (id, dados) => {
 };
 
 // =========================
-// ATIVAR / INATIVAR (SOFT DELETE)
+// ATIVAR / INATIVAR
 // =========================
 export const alterarStatusCotacao = async (id) => {
 
@@ -195,8 +200,7 @@ export const alterarStatusCotacao = async (id) => {
         await supabase
             .from('cotacoes')
             .update({
-                ativo: !cotacao.ativo,
-                updated_at: new Date()
+                ativo: !cotacao.ativo
             })
             .eq('id', id)
             .select()
@@ -204,6 +208,7 @@ export const alterarStatusCotacao = async (id) => {
 
     return { data, error };
 };
+
 // =========================
 // ALTERAR VALIDADE DA COTAÇÃO
 // =========================
@@ -231,8 +236,7 @@ export const alterarValidadeCotacao = async (
             .from('cotacoes')
             .update({
                 status,
-                updated_by: usuarioId,
-                updated_at: new Date()
+                updated_by: usuarioId
             })
             .eq('id', id)
             .select()
@@ -240,6 +244,7 @@ export const alterarValidadeCotacao = async (
 
     return { data, error };
 };
+
 // =========================
 // VERIFICAR RELACIONAMENTOS
 // =========================
@@ -248,23 +253,31 @@ export const verificarRelacionamentosCotacaoService = async (id) => {
     const { count: propostas, error: error1 } =
         await supabase
             .from('cotacao_propostas')
-            .select('*', { count: 'exact', head: true })
+            .select('*', {
+                count: 'exact',
+                head: true
+            })
             .eq('cotacao_id', id);
 
     const { count: itens, error: error2 } =
         await supabase
             .from('cotacao_itens')
-            .select('*', { count: 'exact', head: true })
+            .select('*', {
+                count: 'exact',
+                head: true
+            })
             .eq('cotacao_id', id);
 
     if (error1 || error2) {
-        return { error: error1 || error2 };
+        return {
+            error: error1 || error2
+        };
     }
 
     return {
         data: {
             possuiRelacionamentos:
-                (propostas > 0 || itens > 0),
+                propostas > 0 || itens > 0,
 
             relacionamentos: {
                 propostas,
@@ -279,8 +292,10 @@ export const verificarRelacionamentosCotacaoService = async (id) => {
 // =========================
 export const deletarCotacao = async (id) => {
 
-    const { data: cotacao, error: buscaError } =
-        await buscarCotacaoPorId(id);
+    const {
+        data: cotacao,
+        error: buscaError
+    } = await buscarCotacaoPorId(id);
 
     if (buscaError || !cotacao) {
         return {

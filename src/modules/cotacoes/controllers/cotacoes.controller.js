@@ -8,15 +8,20 @@ import {
   verificarRelacionamentosCotacaoService,
   deletarCotacao,
 } from "../services/cotacoes.service.js";
+
 import { registrarOcorrencia } from "../../historico_pacientes/services/auditoria.service.js";
+
 // =========================
 // LISTAR COTAÇÕES
 // =========================
 export const getCotacoes = async (req, res) => {
+
   try {
+
     const ativo = req.query.ativo !== "false";
 
-    const { data, error } = await listarCotacoes(ativo);
+    const { data, error } =
+      await listarCotacoes(ativo);
 
     if (error) {
       return res.status(500).json({
@@ -25,10 +30,13 @@ export const getCotacoes = async (req, res) => {
     }
 
     return res.json(data);
+
   } catch (err) {
+
     return res.status(500).json({
       erro: "Erro ao listar cotações",
     });
+
   }
 };
 
@@ -36,10 +44,13 @@ export const getCotacoes = async (req, res) => {
 // BUSCAR COTAÇÃO POR ID
 // =========================
 export const getCotacaoById = async (req, res) => {
+
   try {
+
     const { id } = req.params;
 
-    const { data, error } = await buscarCotacaoPorId(id);
+    const { data, error } =
+      await buscarCotacaoPorId(id);
 
     if (error || !data) {
       return res.status(404).json({
@@ -48,10 +59,13 @@ export const getCotacaoById = async (req, res) => {
     }
 
     return res.json(data);
+
   } catch (err) {
+
     return res.status(500).json({
       erro: "Erro ao buscar cotação",
     });
+
   }
 };
 
@@ -59,24 +73,37 @@ export const getCotacaoById = async (req, res) => {
 // CRIAR COTAÇÃO
 // =========================
 export const createCotacao = async (req, res) => {
+
   try {
+
     if (req.user.perfil !== "gestor") {
       return res.status(403).json({
         erro: "Apenas gestor pode criar cotações",
       });
     }
 
-    const { descricao, data_validade, paciente_id } = req.body;
+    const {
+      descricao,
+      data_validade,
+      paciente_id
+    } = req.body;
 
-    if (!descricao || !data_validade || !paciente_id) {
+    if (
+      !descricao ||
+      !data_validade ||
+      !paciente_id
+    ) {
       return res.status(400).json({
-        erro: "Descrição, data de validade e paciente são obrigatórios",
+        erro:
+          "Descrição, data de validade e paciente são obrigatórios",
       });
     }
-    const { data, error } = await inserirCotacao({
-      ...req.body,
-      created_by: req.user.id,
-    });
+
+    const { data, error } =
+      await inserirCotacao({
+        ...req.body,
+        created_by: req.user.id,
+      });
 
     if (error) {
       return res.status(400).json({
@@ -93,10 +120,13 @@ export const createCotacao = async (req, res) => {
     });
 
     return res.status(201).json(data);
+
   } catch (err) {
+
     return res.status(500).json({
       erro: "Erro ao criar cotação",
     });
+
   }
 };
 
@@ -104,7 +134,9 @@ export const createCotacao = async (req, res) => {
 // ATUALIZAR COTAÇÃO
 // =========================
 export const updateCotacao = async (req, res) => {
+
   try {
+
     if (req.user.perfil !== "gestor") {
       return res.status(403).json({
         erro: "Apenas gestor pode atualizar cotações",
@@ -113,10 +145,11 @@ export const updateCotacao = async (req, res) => {
 
     const { id } = req.params;
 
-    const { data, error } = await atualizarCotacao(id, {
-      ...req.body,
-      updated_by: req.user.id,
-    });
+    const { data, error } =
+      await atualizarCotacao(id, {
+        ...req.body,
+        updated_by: req.user.id,
+      });
 
     if (error) {
       return res.status(400).json({
@@ -133,18 +166,23 @@ export const updateCotacao = async (req, res) => {
     });
 
     return res.json(data);
+
   } catch (err) {
+
     return res.status(500).json({
       erro: "Erro ao atualizar cotação",
     });
+
   }
 };
 
 // =========================
-// ATIVAR / INATIVAR (SOFT DELETE)
+// ATIVAR / INATIVAR
 // =========================
 export const toggleStatusCotacao = async (req, res) => {
+
   try {
+
     if (req.user.perfil !== "gestor") {
       return res.status(403).json({
         erro: "Apenas gestor pode alterar status",
@@ -153,7 +191,8 @@ export const toggleStatusCotacao = async (req, res) => {
 
     const { id } = req.params;
 
-    const { data, error } = await alterarStatusCotacao(id);
+    const { data, error } =
+      await alterarStatusCotacao(id);
 
     if (error) {
       return res.status(400).json({
@@ -165,7 +204,10 @@ export const toggleStatusCotacao = async (req, res) => {
       paciente_id: data.paciente_id,
       usuario_id: req.user.id,
       tipo_evento: "ALTERACAO_STATUS",
-      descricao: `Status alterado para ${data.ativo ? "ATIVA" : "INATIVA"}`,
+      descricao:
+        `Status alterado para ${
+          data.ativo ? "ATIVA" : "INATIVA"
+        }`,
       referencia_id: data.id,
     });
 
@@ -173,18 +215,26 @@ export const toggleStatusCotacao = async (req, res) => {
       message: "Status alterado com sucesso",
       data,
     });
+
   } catch (err) {
+
     return res.status(500).json({
       erro: "Erro ao alterar status da cotação",
     });
+
   }
 };
 
 // =========================
 // VERIFICAR RELACIONAMENTOS
 // =========================
-export const verificarRelacionamentosCotacao = async (req, res) => {
+export const verificarRelacionamentosCotacao = async (
+  req,
+  res
+) => {
+
   try {
+
     if (req.user.perfil !== "gestor") {
       return res.status(403).json({
         erro: "Sem permissão",
@@ -193,7 +243,10 @@ export const verificarRelacionamentosCotacao = async (req, res) => {
 
     const { id } = req.params;
 
-    const { data, error } = await verificarRelacionamentosCotacaoService(id);
+    const {
+      data,
+      error
+    } = await verificarRelacionamentosCotacaoService(id);
 
     if (error) {
       return res.status(500).json({
@@ -202,17 +255,24 @@ export const verificarRelacionamentosCotacao = async (req, res) => {
     }
 
     return res.json(data);
+
   } catch (err) {
+
     return res.status(500).json({
-      erro: "Erro ao verificar relacionamentos da cotação",
+      erro:
+        "Erro ao verificar relacionamentos da cotação",
     });
+
   }
 };
+
 // =========================
 // ALTERAR VALIDADE
 // =========================
 export const alterarValidade = async (req, res) => {
+
   try {
+
     if (req.user.perfil !== "gestor") {
       return res.status(403).json({
         erro: "Apenas gestor pode alterar validade",
@@ -222,10 +282,13 @@ export const alterarValidade = async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
 
-    const { data, error } = await alterarValidadeCotacao(
+    const {
+      data,
+      error
+    } = await alterarValidadeCotacao(
       id,
       status,
-      req.user.id,
+      req.user.id
     );
 
     if (error) {
@@ -238,7 +301,8 @@ export const alterarValidade = async (req, res) => {
       paciente_id: data.paciente_id,
       usuario_id: req.user.id,
       tipo_evento: "ALTERACAO_STATUS",
-      descricao: `Cotação marcada como ${status.toUpperCase()}`,
+      descricao:
+        `Cotação marcada como ${status.toUpperCase()}`,
       referencia_id: data.id,
     });
 
@@ -246,17 +310,23 @@ export const alterarValidade = async (req, res) => {
       message: "Validade alterada com sucesso",
       data,
     });
+
   } catch (err) {
+
     return res.status(500).json({
       erro: "Erro ao alterar validade",
     });
+
   }
 };
+
 // =========================
-// DELETE COM VALIDAÇÃO DE VÍNCULO
+// EXCLUIR COTAÇÃO
 // =========================
 export const deleteCotacao = async (req, res) => {
+
   try {
+
     if (req.user.perfil !== "gestor") {
       return res.status(403).json({
         erro: "Apenas gestor pode excluir cotações",
@@ -265,8 +335,10 @@ export const deleteCotacao = async (req, res) => {
 
     const { id } = req.params;
 
-    const { data: rel, error: relError } =
-      await verificarRelacionamentosCotacaoService(id);
+    const {
+      data: rel,
+      error: relError
+    } = await verificarRelacionamentosCotacaoService(id);
 
     if (relError) {
       return res.status(500).json({
@@ -275,14 +347,18 @@ export const deleteCotacao = async (req, res) => {
     }
 
     if (rel?.possuiRelacionamentos) {
+
       return res.status(400).json({
-        erro: "Cotação possui vínculos e não pode ser excluída",
+        erro:
+          "Cotação possui vínculos e não pode ser excluída",
         cotacaoTemVinculos: true,
         relacionamentos: rel.relacionamentos,
       });
+
     }
 
-    const { data, error } = await deletarCotacao(id);
+    const { data, error } =
+      await deletarCotacao(id);
 
     if (error) {
       return res.status(500).json({
@@ -293,9 +369,12 @@ export const deleteCotacao = async (req, res) => {
     return res.status(200).json({
       message: "Cotação excluída com sucesso",
     });
+
   } catch (err) {
+
     return res.status(500).json({
       erro: "Erro ao excluir cotação",
     });
+
   }
 };
