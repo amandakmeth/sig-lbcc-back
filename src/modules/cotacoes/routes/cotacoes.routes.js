@@ -8,7 +8,7 @@ import {
     toggleStatusCotacao,
     deleteCotacao,
     verificarRelacionamentosCotacao,
-    alterarValidade
+    alterarStatusProgresso
 } from '../controllers/cotacoes.controller.js';
 
 import { authMiddleware } from '../../auth/middlewares/auth.middleware.js';
@@ -45,6 +45,7 @@ router.use(authMiddleware);
  */
 router.get('/', getCotacoes);
 
+
 // =========================
 // BUSCAR POR ID
 // =========================
@@ -69,6 +70,7 @@ router.get('/', getCotacoes);
  */
 router.get('/:id', getCotacaoById);
 
+
 // =========================
 // CRIAR
 // =========================
@@ -76,7 +78,7 @@ router.get('/:id', getCotacaoById);
  * @swagger
  * /cotacoes:
  *   post:
- *     summary: Cria uma nova cotação
+ *     summary: Cria uma nova cotação com seus itens
  *     tags: [Cotações]
  *     requestBody:
  *       required: true
@@ -88,20 +90,53 @@ router.get('/:id', getCotacaoById);
  *               - descricao
  *               - data_validade
  *               - paciente_id
+ *               - itens
  *             properties:
  *               descricao:
  *                 type: string
+ *                 example: Cotação de medicamentos
  *               data_validade:
  *                 type: string
  *                 format: date
+ *                 example: 2026-12-31
  *               observacoes:
  *                 type: string
+ *                 example: Cotação para atendimento do paciente
  *               paciente_id:
  *                 type: string
  *                 format: uuid
  *               area_id:
  *                 type: string
  *                 format: uuid
+ *               itens:
+ *                 type: array
+ *                 minItems: 1
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - descricao
+ *                     - quantidade
+ *                     - unidade
+ *                   properties:
+ *                     produto_id:
+ *                       type: string
+ *                       format: uuid
+ *                     descricao:
+ *                       type: string
+ *                       example: Dipirona 500mg
+ *                     quantidade:
+ *                       type: number
+ *                       minimum: 0.01
+ *                       example: 2
+ *                     unidade:
+ *                       type: string
+ *                       example: UN
+ *                     especificacoes:
+ *                       type: string
+ *                       example: Caixa com 20 comprimidos
+ *                     ordem:
+ *                       type: integer
+ *                       example: 1
  *     responses:
  *       201:
  *         description: Cotação criada com sucesso
@@ -110,6 +145,7 @@ router.get('/:id', getCotacaoById);
  */
 router.post('/', createCotacao);
 
+
 // =========================
 // ATUALIZAR
 // =========================
@@ -117,7 +153,8 @@ router.post('/', createCotacao);
  * @swagger
  * /cotacoes/{id}:
  *   put:
- *     summary: Atualiza uma cotação
+ *     summary: Atualiza os dados de uma cotação
+ *     description: Atualiza somente os dados cadastrais da cotação. O status de progresso deve ser alterado exclusivamente pela rota status-progresso.
  *     tags: [Cotações]
  *     parameters:
  *       - in: path
@@ -135,33 +172,42 @@ router.post('/', createCotacao);
  *             properties:
  *               descricao:
  *                 type: string
+ *                 example: Cotação atualizada
  *               data_validade:
  *                 type: string
  *                 format: date
+ *                 example: 2026-12-31
  *               observacoes:
  *                 type: string
+ *                 example: Observações atualizadas
  *               paciente_id:
  *                 type: string
  *                 format: uuid
  *               area_id:
  *                 type: string
  *                 format: uuid
- *               status:
- *                 type: string
  *     responses:
  *       200:
  *         description: Cotação atualizada
+ *       400:
+ *         description: Erro de atualização
+ *       403:
+ *         description: Sem permissão
+ *       404:
+ *         description: Cotação não encontrada
  */
 router.put('/:id', updateCotacao);
 
+
 // =========================
-// STATUS (SOFT DELETE)
+// STATUS DE ATIVAÇÃO
 // =========================
 /**
  * @swagger
  * /cotacoes/{id}/status:
  *   patch:
- *     summary: Ativa ou inativa uma cotação (soft delete)
+ *     summary: Ativa ou inativa uma cotação
+ *     description: Altera somente o campo ativo do registro. Não altera o status de progresso da cotação.
  *     tags: [Cotações]
  *     parameters:
  *       - in: path
@@ -172,23 +218,32 @@ router.put('/:id', updateCotacao);
  *           format: uuid
  *     responses:
  *       200:
- *         description: Status atualizado com sucesso
+ *         description: Status de ativação atualizado com sucesso
+ *       400:
+ *         description: Erro ao alterar status de ativação
+ *       403:
+ *         description: Sem permissão
+ *       404:
+ *         description: Cotação não encontrada
  */
 router.patch('/:id/status', toggleStatusCotacao);
 
+
 // =========================
-// ALTERAR VALIDADE
+// STATUS DE PROGRESSO
 // =========================
 /**
  * @swagger
- * /cotacoes/{id}/validade:
+ * /cotacoes/{id}/status-progresso:
  *   patch:
- *     summary: Altera a validade da cotação
+ *     summary: Altera o status de progresso da cotação
+ *     description: Altera o status do processo da cotação. Para cancelar, o motivo_cancelamento é obrigatório. Cotações finalizadas ou canceladas não podem ter seu status alterado novamente.
  *     tags: [Cotações]
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
+ *         description: ID da cotação
  *         schema:
  *           type: string
  *           format: uuid
@@ -203,16 +258,32 @@ router.patch('/:id/status', toggleStatusCotacao);
  *             properties:
  *               status:
  *                 type: string
- *                 example: valida
+ *                 enum:
+ *                   - aberta
+ *                   - em_andamento
+ *                   - pronta_para_analise
+ *                   - finalizada
+ *                   - cancelada
+ *                 example: em_andamento
+ *               motivo_cancelamento:
+ *                 type: string
+ *                 description: Motivo obrigatório quando o status for cancelada.
+ *                 example: Cotação cancelada por solicitação do setor.
  *     responses:
  *       200:
- *         description: Validade alterada com sucesso
+ *         description: Status de progresso alterado com sucesso
  *       400:
- *         description: Status inválido
+ *         description: Status inválido, motivo de cancelamento não informado ou cotação não pode mais ter o status alterado
  *       403:
  *         description: Sem permissão
+ *       404:
+ *         description: Cotação não encontrada
  */
-router.patch('/:id/validade', alterarValidade);
+router.patch(
+    '/:id/status-progresso',
+    alterarStatusProgresso
+);
+
 
 // =========================
 // VERIFICAR RELACIONAMENTOS
@@ -238,6 +309,8 @@ router.patch('/:id/validade', alterarValidade);
  *         description: Relacionamentos verificados com sucesso
  *       403:
  *         description: Sem permissão
+ *       404:
+ *         description: Cotação não encontrada
  *       500:
  *         description: Erro interno
  */
@@ -246,14 +319,16 @@ router.get(
     verificarRelacionamentosCotacao
 );
 
+
 // =========================
-// DELETE
+// CANCELAR COTAÇÃO
 // =========================
 /**
  * @swagger
  * /cotacoes/{id}:
  *   delete:
- *     summary: Remove uma cotação (somente se não houver vínculos)
+ *     summary: Cancela uma cotação
+ *     description: Realiza o cancelamento lógico da cotação, alterando seu status para cancelada. O registro, seus itens e propostas permanecem no banco. O motivo do cancelamento é obrigatório.
  *     tags: [Cotações]
  *     parameters:
  *       - in: path
@@ -262,14 +337,30 @@ router.get(
  *         schema:
  *           type: string
  *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - motivo_cancelamento
+ *             properties:
+ *               motivo_cancelamento:
+ *                 type: string
+ *                 description: Motivo obrigatório para o cancelamento da cotação.
+ *                 example: Cotação cancelada por solicitação do setor.
  *     responses:
  *       200:
- *         description: Cotação excluída com sucesso
+ *         description: Cotação cancelada com sucesso
  *       400:
- *         description: Cotação possui vínculos e não pode ser excluída
+ *         description: Motivo não informado, cotação já finalizada ou cotação já cancelada
  *       403:
  *         description: Sem permissão
+ *       404:
+ *         description: Cotação não encontrada
  */
 router.delete('/:id', deleteCotacao);
+
 
 export default router;

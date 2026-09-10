@@ -4,12 +4,12 @@ import {
   inserirCotacao,
   atualizarCotacao,
   alterarStatusCotacao,
-  alterarValidadeCotacao,
+  alterarStatusProgressoCotacao,
   verificarRelacionamentosCotacaoService,
-  deletarCotacao,
 } from "../services/cotacoes.service.js";
 
 import { registrarOcorrencia } from "../../historico_pacientes/services/auditoria.service.js";
+
 
 // =========================
 // LISTAR COTAÇÕES
@@ -20,8 +20,10 @@ export const getCotacoes = async (req, res) => {
 
     const ativo = req.query.ativo !== "false";
 
-    const { data, error } =
-      await listarCotacoes(ativo);
+    const {
+      data,
+      error
+    } = await listarCotacoes(ativo);
 
     if (error) {
       return res.status(500).json({
@@ -33,12 +35,18 @@ export const getCotacoes = async (req, res) => {
 
   } catch (err) {
 
+    console.error(
+      "Erro ao listar cotações:",
+      err
+    );
+
     return res.status(500).json({
       erro: "Erro ao listar cotações",
     });
 
   }
 };
+
 
 // =========================
 // BUSCAR COTAÇÃO POR ID
@@ -49,8 +57,10 @@ export const getCotacaoById = async (req, res) => {
 
     const { id } = req.params;
 
-    const { data, error } =
-      await buscarCotacaoPorId(id);
+    const {
+      data,
+      error
+    } = await buscarCotacaoPorId(id);
 
     if (error || !data) {
       return res.status(404).json({
@@ -62,12 +72,18 @@ export const getCotacaoById = async (req, res) => {
 
   } catch (err) {
 
+    console.error(
+      "Erro ao buscar cotação:",
+      err
+    );
+
     return res.status(500).json({
       erro: "Erro ao buscar cotação",
     });
 
   }
 };
+
 
 // =========================
 // CRIAR COTAÇÃO
@@ -85,8 +101,14 @@ export const createCotacao = async (req, res) => {
     const {
       descricao,
       data_validade,
-      paciente_id
+      paciente_id,
+      itens
     } = req.body;
+
+
+    // =========================
+    // VALIDAR COTAÇÃO
+    // =========================
 
     if (
       !descricao ||
@@ -99,29 +121,72 @@ export const createCotacao = async (req, res) => {
       });
     }
 
-    const { data, error } =
-      await inserirCotacao({
-        ...req.body,
-        created_by: req.user.id,
+
+    // =========================
+    // VALIDAR ITENS
+    // =========================
+
+    if (
+      !Array.isArray(itens) ||
+      itens.length === 0
+    ) {
+      return res.status(400).json({
+        erro:
+          "A cotação deve possuir pelo menos um item",
       });
+    }
+
+
+    // =========================
+    // CRIAR COTAÇÃO + ITENS
+    // =========================
+
+    const {
+      data,
+      error
+    } = await inserirCotacao({
+
+      ...req.body,
+
+      // Usuário responsável pela criação
+      created_by: req.user.id,
+
+    });
 
     if (error) {
       return res.status(400).json({
-        erro: error.message || error,
+        erro:
+          error.message || error,
       });
     }
+
+
+    // =========================
+    // REGISTRAR AUDITORIA
+    // =========================
 
     await registrarOcorrencia({
       paciente_id: data.paciente_id,
       usuario_id: req.user.id,
       tipo_evento: "COTACAO_CRIADA",
-      descricao: `Cotação criada: ${data.descricao}`,
+      descricao:
+        `Cotação criada: ${data.descricao}`,
       referencia_id: data.id,
     });
+
+
+    // =========================
+    // RETORNO
+    // =========================
 
     return res.status(201).json(data);
 
   } catch (err) {
+
+    console.error(
+      "Erro ao criar cotação:",
+      err
+    );
 
     return res.status(500).json({
       erro: "Erro ao criar cotação",
@@ -129,6 +194,7 @@ export const createCotacao = async (req, res) => {
 
   }
 };
+
 
 // =========================
 // ATUALIZAR COTAÇÃO
@@ -139,29 +205,42 @@ export const updateCotacao = async (req, res) => {
 
     if (req.user.perfil !== "gestor") {
       return res.status(403).json({
-        erro: "Apenas gestor pode atualizar cotações",
+        erro:
+          "Apenas gestor pode atualizar cotações",
       });
     }
 
     const { id } = req.params;
 
-    const { data, error } =
-      await atualizarCotacao(id, {
+    const {
+      data,
+      error
+    } = await atualizarCotacao(
+      id,
+      {
         ...req.body,
         updated_by: req.user.id,
-      });
+      }
+    );
 
     if (error) {
       return res.status(400).json({
-        erro: error.message || error,
+        erro:
+          error.message || error,
       });
     }
+
+
+    // =========================
+    // REGISTRAR AUDITORIA
+    // =========================
 
     await registrarOcorrencia({
       paciente_id: data.paciente_id,
       usuario_id: req.user.id,
       tipo_evento: "COTACAO_EDITADA",
-      descricao: "Cotação atualizada",
+      descricao:
+        "Cotação atualizada",
       referencia_id: data.id,
     });
 
@@ -169,30 +248,46 @@ export const updateCotacao = async (req, res) => {
 
   } catch (err) {
 
+    console.error(
+      "Erro ao atualizar cotação:",
+      err
+    );
+
     return res.status(500).json({
-      erro: "Erro ao atualizar cotação",
+      erro:
+        "Erro ao atualizar cotação",
     });
 
   }
 };
 
+
 // =========================
-// ATIVAR / INATIVAR
+// ATIVAR / INATIVAR REGISTRO
 // =========================
-export const toggleStatusCotacao = async (req, res) => {
+// OBS:
+// Este endpoint altera somente o campo "ativo".
+// Não altera o status de progresso da cotação.
+export const toggleStatusCotacao = async (
+  req,
+  res
+) => {
 
   try {
 
     if (req.user.perfil !== "gestor") {
       return res.status(403).json({
-        erro: "Apenas gestor pode alterar status",
+        erro:
+          "Apenas gestor pode alterar o status de ativação",
       });
     }
 
     const { id } = req.params;
 
-    const { data, error } =
-      await alterarStatusCotacao(id);
+    const {
+      data,
+      error
+    } = await alterarStatusCotacao(id);
 
     if (error) {
       return res.status(400).json({
@@ -200,30 +295,46 @@ export const toggleStatusCotacao = async (req, res) => {
       });
     }
 
+
+    // =========================
+    // REGISTRAR AUDITORIA
+    // =========================
+
     await registrarOcorrencia({
       paciente_id: data.paciente_id,
       usuario_id: req.user.id,
-      tipo_evento: "ALTERACAO_STATUS",
+      tipo_evento: "ALTERACAO_STATUS_ATIVACAO",
       descricao:
-        `Status alterado para ${
-          data.ativo ? "ATIVA" : "INATIVA"
+        `Cotação ${
+          data.ativo
+            ? "ativada"
+            : "inativada"
         }`,
       referencia_id: data.id,
     });
 
+
     return res.status(200).json({
-      message: "Status alterado com sucesso",
+      message:
+        "Status de ativação alterado com sucesso",
       data,
     });
 
   } catch (err) {
 
+    console.error(
+      "Erro ao alterar status de ativação:",
+      err
+    );
+
     return res.status(500).json({
-      erro: "Erro ao alterar status da cotação",
+      erro:
+        "Erro ao alterar status de ativação",
     });
 
   }
 };
+
 
 // =========================
 // VERIFICAR RELACIONAMENTOS
@@ -258,6 +369,11 @@ export const verificarRelacionamentosCotacao = async (
 
   } catch (err) {
 
+    console.error(
+      "Erro ao verificar relacionamentos da cotação:",
+      err
+    );
+
     return res.status(500).json({
       erro:
         "Erro ao verificar relacionamentos da cotação",
@@ -266,28 +382,87 @@ export const verificarRelacionamentosCotacao = async (
   }
 };
 
+
 // =========================
-// ALTERAR VALIDADE
+// ALTERAR STATUS DE PROGRESSO
 // =========================
-export const alterarValidade = async (req, res) => {
+// Permite alterar o status do processo da cotação.
+//
+// Status possíveis:
+// - aberta
+// - em_andamento
+// - pronta_para_analise
+// - finalizada
+// - cancelada
+//
+// Para cancelar:
+// - motivo_cancelamento é obrigatório.
+//
+// Uma cotação finalizada ou cancelada
+// não pode ter seu status alterado.
+export const alterarStatusProgresso = async (
+  req,
+  res
+) => {
 
   try {
 
     if (req.user.perfil !== "gestor") {
       return res.status(403).json({
-        erro: "Apenas gestor pode alterar validade",
+        erro:
+          "Apenas gestor pode alterar o status da cotação",
       });
     }
 
     const { id } = req.params;
-    const { status } = req.body;
+
+    const {
+      status,
+      motivo_cancelamento
+    } = req.body;
+
+
+    // =========================
+    // VALIDAR STATUS
+    // =========================
+
+    if (!status) {
+      return res.status(400).json({
+        erro:
+          "O status da cotação é obrigatório",
+      });
+    }
+
+
+    // =========================
+    // VALIDAR MOTIVO
+    // =========================
+
+    if (
+      status === "cancelada" &&
+      (
+        !motivo_cancelamento ||
+        !motivo_cancelamento.trim()
+      )
+    ) {
+      return res.status(400).json({
+        erro:
+          "O motivo do cancelamento é obrigatório",
+      });
+    }
+
+
+    // =========================
+    // ALTERAR STATUS
+    // =========================
 
     const {
       data,
       error
-    } = await alterarValidadeCotacao(
+    } = await alterarStatusProgressoCotacao(
       id,
       status,
+      motivo_cancelamento,
       req.user.id
     );
 
@@ -297,83 +472,195 @@ export const alterarValidade = async (req, res) => {
       });
     }
 
+
+    // =========================
+    // REGISTRAR AUDITORIA
+    // =========================
+
     await registrarOcorrencia({
       paciente_id: data.paciente_id,
       usuario_id: req.user.id,
-      tipo_evento: "ALTERACAO_STATUS",
+      tipo_evento:
+        status === "cancelada"
+          ? "COTACAO_CANCELADA"
+          : "ALTERACAO_STATUS",
       descricao:
-        `Cotação marcada como ${status.toUpperCase()}`,
+        status === "cancelada"
+          ? `Cotação cancelada: ${motivo_cancelamento.trim()}`
+          : `Cotação alterada para ${data.status.toUpperCase()}`,
       referencia_id: data.id,
     });
 
+
+    // =========================
+    // RETORNO
+    // =========================
+
     return res.status(200).json({
-      message: "Validade alterada com sucesso",
+      message:
+        status === "cancelada"
+          ? "Cotação cancelada com sucesso"
+          : "Status da cotação alterado com sucesso",
       data,
     });
 
   } catch (err) {
 
+    console.error(
+      "Erro ao alterar status da cotação:",
+      err
+    );
+
     return res.status(500).json({
-      erro: "Erro ao alterar validade",
+      erro:
+        "Erro ao alterar status da cotação",
     });
 
   }
 };
 
+
 // =========================
-// EXCLUIR COTAÇÃO
+// CANCELAR COTAÇÃO
 // =========================
-export const deleteCotacao = async (req, res) => {
+// NÃO exclui o registro.
+//
+// O DELETE da cotação representa
+// um cancelamento lógico:
+//
+// Cotação -> status = "cancelada"
+//
+// Itens e propostas permanecem no banco.
+//
+// O motivo do cancelamento é obrigatório.
+export const deleteCotacao = async (
+  req,
+  res
+) => {
 
   try {
 
     if (req.user.perfil !== "gestor") {
       return res.status(403).json({
-        erro: "Apenas gestor pode excluir cotações",
+        erro:
+          "Apenas gestor pode cancelar cotações",
       });
     }
 
     const { id } = req.params;
 
     const {
-      data: rel,
-      error: relError
-    } = await verificarRelacionamentosCotacaoService(id);
+      motivo_cancelamento
+    } = req.body;
 
-    if (relError) {
-      return res.status(500).json({
-        erro: relError.message,
-      });
-    }
 
-    if (rel?.possuiRelacionamentos) {
+    // =========================
+    // VALIDAR MOTIVO
+    // =========================
 
+    if (
+      !motivo_cancelamento ||
+      !motivo_cancelamento.trim()
+    ) {
       return res.status(400).json({
         erro:
-          "Cotação possui vínculos e não pode ser excluída",
-        cotacaoTemVinculos: true,
-        relacionamentos: rel.relacionamentos,
+          "O motivo do cancelamento é obrigatório",
       });
-
     }
 
-    const { data, error } =
-      await deletarCotacao(id);
+
+    // =========================
+    // BUSCAR COTAÇÃO
+    // =========================
+
+    const {
+      data: cotacao,
+      error: buscaError
+    } = await buscarCotacaoPorId(id);
+
+    if (buscaError || !cotacao) {
+      return res.status(404).json({
+        erro: "Cotação não encontrada",
+      });
+    }
+
+
+    // =========================
+    // VALIDAR STATUS ATUAL
+    // =========================
+
+    if (cotacao.status === "finalizada") {
+      return res.status(400).json({
+        erro:
+          "Não é possível cancelar uma cotação finalizada",
+      });
+    }
+
+    if (cotacao.status === "cancelada") {
+      return res.status(400).json({
+        erro:
+          "A cotação já está cancelada",
+      });
+    }
+
+
+    // =========================
+    // CANCELAR
+    // =========================
+    // Não exclui a cotação.
+    // Itens e propostas permanecem vinculados.
+
+    const {
+      data,
+      error
+    } = await alterarStatusProgressoCotacao(
+      id,
+      "cancelada",
+      motivo_cancelamento,
+      req.user.id
+    );
 
     if (error) {
-      return res.status(500).json({
+      return res.status(400).json({
         erro: error.message,
       });
     }
 
+
+    // =========================
+    // REGISTRAR AUDITORIA
+    // =========================
+
+    await registrarOcorrencia({
+      paciente_id: data.paciente_id,
+      usuario_id: req.user.id,
+      tipo_evento: "COTACAO_CANCELADA",
+      descricao:
+        `Cotação cancelada: ${motivo_cancelamento.trim()}`,
+      referencia_id: data.id,
+    });
+
+
+    // =========================
+    // RETORNO
+    // =========================
+
     return res.status(200).json({
-      message: "Cotação excluída com sucesso",
+      message:
+        "Cotação cancelada com sucesso",
+      data,
     });
 
   } catch (err) {
 
+    console.error(
+      "Erro ao cancelar cotação:",
+      err
+    );
+
     return res.status(500).json({
-      erro: "Erro ao excluir cotação",
+      erro:
+        "Erro ao cancelar cotação",
     });
 
   }
