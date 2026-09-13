@@ -1,18 +1,22 @@
+
 import swaggerJsdoc from 'swagger-jsdoc'
 
 const options = {
     definition: {
         openapi: '3.0.0',
+
         info: {
             title: 'API LBCC',
             version: '1.0.0',
             description: 'Documentação da API do sistema LBCC'
         },
+
         servers: [
             {
                 url: 'http://localhost:3000'
             }
         ],
+
         components: {
             securitySchemes: {
                 bearerAuth: {
@@ -21,7 +25,13 @@ const options = {
                     bearerFormat: 'JWT'
                 }
             }
-        }
+        },
+
+        security: [
+            {
+                bearerAuth: []
+            }
+        ]
     },
 
     apis: ['./src/modules/**/*.js']
@@ -30,3 +40,4 @@ const options = {
 const swaggerSpec = swaggerJsdoc(options)
 
 export default swaggerSpec
+

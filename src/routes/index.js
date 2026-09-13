@@ -9,26 +9,34 @@ import pacienteDocumentosRoutes from '../modules/paciente_documentos/routes/paci
 import fornecedoresRoutes from '../modules/fornecedores/routes/fornecedores.route.js'
 import cotacoesRoutes from '../modules/cotacoes/routes/cotacoes.routes.js'
 import cotacaoItensRoutes from '../modules/cotacoesItem/routes/cotacaoItens.routes.js'
+import cotacaoPropostasRoutes from '../modules/cotacao_propostas/routes/cotacaoPropostas.routes.js'
 import atendimentosRoutes from '../modules/atendimentos/routes/atendimentos.routes.js'
 import historicoPacientesRoutes from '../modules/historico_pacientes/routes/historico.routes.js'
 
 
 const router = express.Router()
 
-//Rotas públicas
+
+// Rotas públicas
+
 router.use('/auth', authRoutes)
 
-//Rotas protegidas por módulo
+
+// Rotas protegidas por módulo
+
 router.use('/usuarios', usuariosRoutes)
 router.use('/areas', areasRoutes)
 router.use('/produtos', produtosRoutes)
 router.use('/pacientes', pacientesRoutes)
-router.use('/fornecedores',fornecedoresRoutes)
-router.use('/cotacoes',cotacoesRoutes)
+router.use('/fornecedores', fornecedoresRoutes)
+router.use('/cotacoes', cotacoesRoutes)
 router.use('/cotacao-itens', cotacaoItensRoutes)
+router.use('/cotacao-propostas', cotacaoPropostasRoutes)
 router.use('/atendimentos', atendimentosRoutes)
 router.use('/historico-pacientes', historicoPacientesRoutes)
-//Documentos (usa rotas próprias internas)
+
+// Documentos (usa rotas próprias internas)
+
 router.use(pacienteDocumentosRoutes)
 
 router.get('/', (req, res) => {
