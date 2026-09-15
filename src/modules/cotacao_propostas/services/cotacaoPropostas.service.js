@@ -1,4 +1,5 @@
 import supabase from "../../../config/supabase.js";
+import { aplicarStatusCotacaoPorFatos } from "../../cotacoes/services/cotacaoStatus.js";
 
 // =========================
 // LISTAR PROPOSTAS / ORÇAMENTOS
@@ -120,7 +121,7 @@ export const inserirProposta = async (dados) => {
     const { data: cotacao, error: cotacaoError } =
         await supabase
             .from("cotacoes")
-            .select("id, ativo")
+            .select("id, ativo, status")
             .eq("id", cotacao_id)
             .single();
 
@@ -140,11 +141,55 @@ export const inserirProposta = async (dados) => {
         };
     }
 
+    if (
+        cotacao.status === "finalizada" ||
+        cotacao.status === "cancelada"
+    ) {
+        return {
+            error: {
+                message:
+                    "Não é possível registrar orçamento para uma cotação encerrada"
+            }
+        };
+    }
+
+    const { data: fornecedor, error: fornecedorError } =
+        await supabase
+            .from("fornecedores")
+            .select("id, ativo")
+            .eq("id", fornecedor_id)
+            .single();
+
+    if (fornecedorError || !fornecedor) {
+        return {
+            error: {
+                message: "Fornecedor não encontrado"
+            }
+        };
+    }
+
+    if (fornecedor.ativo === false) {
+        return {
+            error: {
+                message: "Fornecedor inativo não pode receber orçamento"
+            }
+        };
+    }
+
     // =========================
     // VERIFICAR ITENS DA COTAÇÃO
     // =========================
 
     const itemIds = itens.map(item => item.item_id);
+
+    if (new Set(itemIds).size !== itemIds.length) {
+        return {
+            error: {
+                message:
+                    "Não é permitido repetir o mesmo fornecedor no mesmo item"
+            }
+        };
+    }
 
     const { data: itensCotacao, error: itensError } =
         await supabase
@@ -178,35 +223,75 @@ export const inserirProposta = async (dados) => {
         };
     }
 
+    const { data: propostasExistentes, error: propostasExistentesError } =
+        await supabase
+            .from("cotacao_propostas")
+            .select(`
+                id,
+                fornecedor_id,
+                cotacao_proposta_itens (
+                    id,
+                    item_id
+                )
+            `)
+            .eq("cotacao_id", cotacao_id);
+
+    if (propostasExistentesError) {
+        return {
+            error: propostasExistentesError
+        };
+    }
+
+    const itemIdsSet = new Set(itemIds);
+
+    const duplicado = (propostasExistentes || []).some((proposta) =>
+        proposta.fornecedor_id === fornecedor_id &&
+        (proposta.cotacao_proposta_itens || []).some(
+            (linha) => itemIdsSet.has(linha.item_id)
+        )
+    );
+
+    if (duplicado) {
+        return {
+            error: {
+                message:
+                    "Já existe orçamento deste fornecedor neste item"
+            }
+        };
+    }
+
     // =========================
     // CALCULAR VALORES
     // =========================
 
-    const itensProcessados = itens.map(item => {
+    const itensProcessados = [];
 
+    for (const item of itens) {
         const itemCotacao = itensCotacao.find(
             itemCotacao => itemCotacao.id === item.item_id
         );
 
         const valorUnitario = Number(item.valor_unitario);
 
-        if (isNaN(valorUnitario) || valorUnitario < 0) {
-            throw new Error(
-                "Valor unitário deve ser um número maior ou igual a zero"
-            );
+        if (Number.isNaN(valorUnitario) || valorUnitario <= 0) {
+            return {
+                error: {
+                    message:
+                        "Valor unitário deve ser um número maior que zero"
+                }
+            };
         }
 
         const quantidade = Number(itemCotacao.quantidade);
-
         const valorTotal = quantidade * valorUnitario;
 
-        return {
+        itensProcessados.push({
             item_id: item.item_id,
             valor_unitario: valorUnitario,
             valor_total: valorTotal,
             observacoes: item.observacoes || null
-        };
-    });
+        });
+    }
 
     const valorTotalProposta = itensProcessados.reduce(
         (total, item) => total + item.valor_total,
@@ -271,6 +356,16 @@ export const inserirProposta = async (dados) => {
         };
     }
 
+    const {
+        error: statusError
+    } = await aplicarStatusCotacaoPorFatos(cotacao_id);
+
+    if (statusError) {
+        return {
+            error: statusError
+        };
+    }
+
     return {
         data: {
             ...proposta,
@@ -284,6 +379,48 @@ export const inserirProposta = async (dados) => {
 // ATUALIZAR PROPOSTA
 // =========================
 export const atualizarProposta = async (id, dados) => {
+
+    const { data: proposta, error: buscaError } =
+        await supabase
+            .from("cotacao_propostas")
+            .select("id, cotacao_id")
+            .eq("id", id)
+            .single();
+
+    if (buscaError || !proposta) {
+        return {
+            error: {
+                message: "Orçamento não encontrado"
+            }
+        };
+    }
+
+    const { data: cotacao, error: cotacaoError } =
+        await supabase
+            .from("cotacoes")
+            .select("id, status")
+            .eq("id", proposta.cotacao_id)
+            .single();
+
+    if (cotacaoError || !cotacao) {
+        return {
+            error: {
+                message: "Cotação não encontrada"
+            }
+        };
+    }
+
+    if (
+        cotacao.status === "finalizada" ||
+        cotacao.status === "cancelada"
+    ) {
+        return {
+            error: {
+                message:
+                    "Não é possível alterar orçamento de uma cotação encerrada"
+            }
+        };
+    }
 
     const dadosAtualizacao = {};
 
@@ -336,7 +473,7 @@ export const deletarProposta = async (id) => {
     const { data: proposta, error: buscaError } =
         await supabase
             .from("cotacao_propostas")
-            .select("id")
+            .select("id, cotacao_id")
             .eq("id", id)
             .single();
 
@@ -344,6 +481,33 @@ export const deletarProposta = async (id) => {
         return {
             error: {
                 message: "Orçamento não encontrado"
+            }
+        };
+    }
+
+    const { data: cotacao, error: cotacaoError } =
+        await supabase
+            .from("cotacoes")
+            .select("id, status")
+            .eq("id", proposta.cotacao_id)
+            .single();
+
+    if (cotacaoError || !cotacao) {
+        return {
+            error: {
+                message: "Cotação não encontrada"
+            }
+        };
+    }
+
+    if (
+        cotacao.status === "finalizada" ||
+        cotacao.status === "cancelada"
+    ) {
+        return {
+            error: {
+                message:
+                    "Não é possível alterar orçamento de uma cotação encerrada"
             }
         };
     }
@@ -367,8 +531,25 @@ export const deletarProposta = async (id) => {
             .eq("id", id)
             .select();
 
+    if (error) {
+        return {
+            data,
+            error
+        };
+    }
+
+    const {
+        error: statusError
+    } = await aplicarStatusCotacaoPorFatos(proposta.cotacao_id);
+
+    if (statusError) {
+        return {
+            error: statusError
+        };
+    }
+
     return {
         data,
-        error
+        error: null
     };
 };

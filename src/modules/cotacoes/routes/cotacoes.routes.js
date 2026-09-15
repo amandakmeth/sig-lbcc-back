@@ -11,6 +11,13 @@ import {
     alterarStatusProgresso
 } from '../controllers/cotacoes.controller.js';
 
+import {
+    createOrcamentosItem,
+    updateOrcamentoItem,
+    deleteOrcamentoItem,
+    escolherVencedorOrcamentoItem
+} from '../controllers/cotacaoOrcamentos.controller.js';
+
 import { authMiddleware } from '../../auth/middlewares/auth.middleware.js';
 
 const router = express.Router();
@@ -69,6 +76,199 @@ router.get('/', getCotacoes);
  *         description: Cotação não encontrada
  */
 router.get('/:id', getCotacaoById);
+
+/**
+ * @swagger
+ * /cotacoes/{id}/itens/{itemId}/orcamentos:
+ *   post:
+ *     summary: Lança orçamentos em um item da cotação
+ *     tags: [Cotações]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: itemId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: array
+ *             minItems: 1
+ *             items:
+ *               type: object
+ *               required:
+ *                 - fornecedor_id
+ *                 - valor_unitario
+ *               properties:
+ *                 fornecedor_id:
+ *                   type: string
+ *                   format: uuid
+ *                 valor_unitario:
+ *                   type: number
+ *                   minimum: 0.01
+ *                 observacoes:
+ *                   type: string
+ *     responses:
+ *       201:
+ *         description: Cotação com os orçamentos aninhados nos itens
+ *       400:
+ *         description: Erro de validação
+ *       401:
+ *         description: Sem autenticação
+ *       403:
+ *         description: Sem permissão
+ */
+router.post(
+    '/:id/itens/:itemId/orcamentos',
+    createOrcamentosItem
+);
+
+/**
+ * @swagger
+ * /cotacoes/{id}/itens/{itemId}/orcamentos/{orcamentoId}:
+ *   put:
+ *     summary: Corrige o valor unitário de um orçamento
+ *     tags: [Cotações]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: itemId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: orcamentoId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - valor_unitario
+ *             properties:
+ *               valor_unitario:
+ *                 type: number
+ *                 minimum: 0.01
+ *     responses:
+ *       200:
+ *         description: Cotação com o orçamento corrigido
+ *       400:
+ *         description: Erro de validação
+ *       401:
+ *         description: Sem autenticação
+ *       403:
+ *         description: Sem permissão
+ */
+router.put(
+    '/:id/itens/:itemId/orcamentos/:orcamentoId',
+    updateOrcamentoItem
+);
+
+/**
+ * @swagger
+ * /cotacoes/{id}/itens/{itemId}/orcamentos/{orcamentoId}:
+ *   delete:
+ *     summary: Remove um orçamento do item
+ *     tags: [Cotações]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: itemId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: orcamentoId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Cotação sem o orçamento removido
+ *       400:
+ *         description: Erro de validação
+ *       401:
+ *         description: Sem autenticação
+ *       403:
+ *         description: Sem permissão
+ */
+router.delete(
+    '/:id/itens/:itemId/orcamentos/:orcamentoId',
+    deleteOrcamentoItem
+);
+
+/**
+ * @swagger
+ * /cotacoes/{id}/itens/{itemId}/vencedor:
+ *   patch:
+ *     summary: Define o orçamento vencedor de um item
+ *     tags: [Cotações]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: itemId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - orcamento_id
+ *             properties:
+ *               orcamento_id:
+ *                 type: string
+ *                 format: uuid
+ *     responses:
+ *       200:
+ *         description: Cotação com o vencedor do item
+ *       400:
+ *         description: Erro de validação
+ *       401:
+ *         description: Sem autenticação
+ *       403:
+ *         description: Sem permissão
+ */
+router.patch(
+    '/:id/itens/:itemId/vencedor',
+    escolherVencedorOrcamentoItem
+);
 
 
 // =========================
@@ -154,7 +354,7 @@ router.post('/', createCotacao);
  * /cotacoes/{id}:
  *   put:
  *     summary: Atualiza os dados de uma cotação
- *     description: Atualiza somente os dados cadastrais da cotação. O status de progresso deve ser alterado exclusivamente pela rota status-progresso.
+ *     description: Atualiza somente os dados cadastrais da cotação. O status de progresso não é alterado aqui; cancelar permanece na rota status-progresso ou no DELETE lógico.
  *     tags: [Cotações]
  *     parameters:
  *       - in: path
@@ -237,7 +437,7 @@ router.patch('/:id/status', toggleStatusCotacao);
  * /cotacoes/{id}/status-progresso:
  *   patch:
  *     summary: Altera o status de progresso da cotação
- *     description: Altera o status do processo da cotação. Para cancelar, o motivo_cancelamento é obrigatório. Cotações finalizadas ou canceladas não podem ter seu status alterado novamente.
+ *     description: Cancela a cotação. O único status aceito nesta rota é cancelada, com motivo_cancelamento obrigatório. aberta, em_andamento, pronta_para_analise e finalizada são recusados. Cotações finalizadas ou canceladas não podem ter seu status alterado novamente.
  *     tags: [Cotações]
  *     parameters:
  *       - in: path
@@ -259,12 +459,8 @@ router.patch('/:id/status', toggleStatusCotacao);
  *               status:
  *                 type: string
  *                 enum:
- *                   - aberta
- *                   - em_andamento
- *                   - pronta_para_analise
- *                   - finalizada
  *                   - cancelada
- *                 example: em_andamento
+ *                 example: cancelada
  *               motivo_cancelamento:
  *                 type: string
  *                 description: Motivo obrigatório quando o status for cancelada.
