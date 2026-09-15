@@ -6,9 +6,9 @@
 
 **Status:** ready-for-agent
 
-- [ ] Incluir Item (zero Orçamentos) numa Cotação `pronta_para_analise` responde `em_andamento`; vencedores dos outros Itens seguem marcados
-- [ ] Apagar um Item remove os Orçamentos daquele Item e o status da Cotação é o fato restante (incluindo recuo para `aberta` se não sobrar preço)
-- [ ] Apagar o último Item da Cotação → 400; a Cotação permanece com aquele Item
-- [ ] Alterar quantidade (> 0) recalcula `valor_total` de cada Orçamento do Item e preserva `valor_unitario`
-- [ ] Create/update de descrição, produto e unidade do Item continua válido em Cotação não terminal; Cotação terminal continua recusando mudança de Item
-- [ ] Não se reativa Fornecedor como campo obrigatório do Item
+- [x] Incluir Item (zero Orçamentos) numa Cotação `pronta_para_analise` responde `em_andamento`; vencedores dos outros Itens seguem marcados
+- [x] Apagar um Item remove os Orçamentos daquele Item e o status da Cotação é o fato restante (incluindo recuo para `aberta` se não sobrar preço)
+- [x] Apagar o último Item da Cotação → 400; a Cotação permanece com aquele Item
+- [x] Alterar quantidade (> 0) recalcula `valor_total` de cada Orçamento do Item e preserva `valor_unitario`
+- [x] Create/update de descrição, produto e unidade do Item continua válido em Cotação não terminal; Cotação terminal continua recusando mudança de Item
+- [x] Não se reativa Fornecedor como campo obrigatório do Item
