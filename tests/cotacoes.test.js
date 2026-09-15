@@ -8,6 +8,7 @@ let cotacaoId = '';
 
 let pacienteId = '';
 let areaId = '';
+let fornecedorId = '';
 
 beforeAll(async () => {
 
@@ -35,10 +36,52 @@ beforeAll(async () => {
 
     tokenOperador = operador.body.access_token;
 
-    // ⚠️ IMPORTANTE:
-    // Esses IDs precisam existir no banco (seed obrigatório)
-    pacienteId = '00000000-0000-0000-0000-000000000001';
-    areaId = '00000000-0000-0000-0000-000000000002';
+    // Mesmo estilo de pacientes/áreas/fornecedores: a costura HTTP
+    // cria os FKs. 400 por FK na Cotação continua o risco já conhecido
+    // se este setup falhar — não é um caminho novo.
+    const stamp = Date.now();
+
+    const paciente = await request(app)
+        .post('/pacientes')
+        .set('Authorization', `Bearer ${tokenGestor}`)
+        .send({
+            nome: `Paciente teste ${stamp}`,
+            data_nascimento: '2000-01-01',
+            cidade: 'Londrina',
+            estado: 'PR'
+        });
+
+    pacienteId = (paciente.body[0] || paciente.body)?.id;
+
+    const area = await request(app)
+        .post('/areas')
+        .set('Authorization', `Bearer ${tokenGestor}`)
+        .send({
+            nome: `Área teste ${stamp}`,
+            descricao: 'seed teste'
+        });
+
+    areaId = (area.body[0] || area.body)?.id;
+
+    const fornecedor = await request(app)
+        .post('/fornecedores')
+        .set('Authorization', `Bearer ${tokenGestor}`)
+        .send({
+            razao_social: `Fornecedor teste ${stamp}`,
+            nome_fantasia: 'Fornecedor Teste',
+            cnpj: `${stamp}`,
+            telefone: '43999999999',
+            email: 'teste@email.com'
+        });
+
+    const fornecedorCriado = fornecedor.body[0] || fornecedor.body;
+    fornecedorId = fornecedorCriado?.id;
+
+    if (!pacienteId || !areaId || !fornecedorId) {
+        throw new Error(
+            'Seed da costura: paciente, área e fornecedor ativos são obrigatórios'
+        );
+    }
 });
 
 describe('Cotações - Regras de Negócio', () => {
@@ -78,20 +121,33 @@ describe('Cotações - Regras de Negócio', () => {
                 data_validade: '2026-12-31',
                 observacoes: 'teste',
                 paciente_id: pacienteId,
-                area_id: areaId
+                area_id: areaId,
+                itens: [
+                    {
+                        descricao: 'Item teste automatizado',
+                        quantidade: 2,
+                        unidade: 'UN'
+                    }
+                ]
             });
 
-        // 🔥 IMPORTANTE: pode falhar por FK em ambiente sem seed
+        // 🔥 IMPORTANTE: 400 por FK continua o risco já conhecido
         expect([201, 400]).toContain(res.statusCode);
 
-        if (res.statusCode === 201) {
-
-            const cotacao = res.body?.[0] || res.body;
-
-            expect(cotacao).toHaveProperty('id');
-
-            cotacaoId = cotacao.id;
+        if (res.statusCode === 400) {
+            expect(res.body.erro).not.toMatch(/pelo menos um item/i);
+            return;
         }
+
+        const cotacao = res.body[0] || res.body;
+
+        expect(cotacao).toHaveProperty('id');
+
+        cotacaoId = cotacao.id;
+
+        expect(Array.isArray(cotacao.cotacao_itens)).toBe(true);
+        expect(cotacao.cotacao_itens.length).toBeGreaterThan(0);
+        expect(cotacao.cotacao_itens[0]).toHaveProperty('id');
     });
 
     it('operador NÃO pode criar cotação', async () => {
@@ -112,7 +168,7 @@ describe('Cotações - Regras de Negócio', () => {
     // =========================
     it('gestor pode buscar cotação', async () => {
 
-        if (!cotacaoId) return;
+        expect(cotacaoId).toBeTruthy();
 
         const res = await request(app)
             .get(`/cotacoes/${cotacaoId}`)
@@ -120,11 +176,13 @@ describe('Cotações - Regras de Negócio', () => {
 
         expect(res.statusCode).toBe(200);
         expect(res.body).toHaveProperty('id');
+        expect(Array.isArray(res.body.cotacao_itens)).toBe(true);
+        expect(res.body.cotacao_itens.length).toBeGreaterThan(0);
     });
 
     it('operador pode ou não ver cotação', async () => {
 
-        if (!cotacaoId) return;
+        expect(cotacaoId).toBeTruthy();
 
         const res = await request(app)
             .get(`/cotacoes/${cotacaoId}`)
@@ -138,7 +196,7 @@ describe('Cotações - Regras de Negócio', () => {
     // =========================
     it('gestor pode atualizar cotação', async () => {
 
-        if (!cotacaoId) return;
+        expect(cotacaoId).toBeTruthy();
 
         const res = await request(app)
             .put(`/cotacoes/${cotacaoId}`)
@@ -152,7 +210,7 @@ describe('Cotações - Regras de Negócio', () => {
 
     it('operador NÃO pode atualizar cotação', async () => {
 
-        if (!cotacaoId) return;
+        expect(cotacaoId).toBeTruthy();
 
         const res = await request(app)
             .put(`/cotacoes/${cotacaoId}`)
@@ -169,7 +227,7 @@ describe('Cotações - Regras de Negócio', () => {
     // =========================
     it('gestor pode ativar/inativar cotação', async () => {
 
-        if (!cotacaoId) return;
+        expect(cotacaoId).toBeTruthy();
 
         const res1 = await request(app)
             .patch(`/cotacoes/${cotacaoId}/status`)
@@ -197,7 +255,7 @@ describe('Cotações - Regras de Negócio', () => {
 
     it('operador NÃO pode alterar status', async () => {
 
-        if (!cotacaoId) return;
+        expect(cotacaoId).toBeTruthy();
 
         const res = await request(app)
             .patch(`/cotacoes/${cotacaoId}/status`)
@@ -207,30 +265,40 @@ describe('Cotações - Regras de Negócio', () => {
     });
 
     // =========================
-    // DELETE (NOVO)
+    // CANCELAR (DELETE LÓGICO)
     // =========================
-    it('gestor pode deletar cotação (ou bloquear por vínculo)', async () => {
+    it('gestor pode cancelar cotação com motivo', async () => {
 
-        if (!cotacaoId) return;
+        expect(cotacaoId).toBeTruthy();
 
         const res = await request(app)
             .delete(`/cotacoes/${cotacaoId}`)
-            .set('Authorization', `Bearer ${tokenGestor}`);
+            .set('Authorization', `Bearer ${tokenGestor}`)
+            .send({
+                motivo_cancelamento: 'Cancelamento de teste automatizado'
+            });
 
-        expect([200, 400]).toContain(res.statusCode);
+        expect(res.statusCode).toBe(200);
 
-        if (res.statusCode === 400) {
-            expect(res.body).toHaveProperty('cotacaoTemVinculos');
-        }
+        const cotacao = res.body.data || res.body;
+
+        expect(cotacao).toHaveProperty('status', 'cancelada');
+        expect(cotacao).toHaveProperty(
+            'motivo_cancelamento',
+            'Cancelamento de teste automatizado'
+        );
     });
 
     it('operador NÃO pode deletar cotação', async () => {
 
-        if (!cotacaoId) return;
+        expect(cotacaoId).toBeTruthy();
 
         const res = await request(app)
             .delete(`/cotacoes/${cotacaoId}`)
-            .set('Authorization', `Bearer ${tokenOperador}`);
+            .set('Authorization', `Bearer ${tokenOperador}`)
+            .send({
+                motivo_cancelamento: 'Tentativa do operador'
+            });
 
         expect(res.statusCode).toBe(403);
     });
