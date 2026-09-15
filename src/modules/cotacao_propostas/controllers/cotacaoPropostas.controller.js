@@ -83,6 +83,12 @@ export const createProposta = async (req, res) => {
             itens
         } = req.body;
 
+        if (req.user.perfil !== "gestor") {
+            return res.status(403).json({
+                erro: "Apenas gestor pode registrar orçamentos"
+            });
+        }
+
         if (!cotacao_id || !fornecedor_id || !data_proposta) {
 
             return res.status(400).json({

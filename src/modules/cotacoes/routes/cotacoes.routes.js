@@ -11,6 +11,8 @@ import {
     alterarStatusProgresso
 } from '../controllers/cotacoes.controller.js';
 
+import { createOrcamentosItem } from '../controllers/cotacaoOrcamentos.controller.js';
+
 import { authMiddleware } from '../../auth/middlewares/auth.middleware.js';
 
 const router = express.Router();
@@ -69,6 +71,61 @@ router.get('/', getCotacoes);
  *         description: Cotação não encontrada
  */
 router.get('/:id', getCotacaoById);
+
+/**
+ * @swagger
+ * /cotacoes/{id}/itens/{itemId}/orcamentos:
+ *   post:
+ *     summary: Lança orçamentos em um item da cotação
+ *     tags: [Cotações]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: itemId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: array
+ *             minItems: 1
+ *             items:
+ *               type: object
+ *               required:
+ *                 - fornecedor_id
+ *                 - valor_unitario
+ *               properties:
+ *                 fornecedor_id:
+ *                   type: string
+ *                   format: uuid
+ *                 valor_unitario:
+ *                   type: number
+ *                   minimum: 0.01
+ *                 observacoes:
+ *                   type: string
+ *     responses:
+ *       201:
+ *         description: Cotação com os orçamentos aninhados nos itens
+ *       400:
+ *         description: Erro de validação
+ *       401:
+ *         description: Sem autenticação
+ *       403:
+ *         description: Sem permissão
+ */
+router.post(
+    '/:id/itens/:itemId/orcamentos',
+    createOrcamentosItem
+);
 
 
 // =========================

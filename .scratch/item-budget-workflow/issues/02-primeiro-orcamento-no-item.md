@@ -31,15 +31,15 @@ Costura: Jest + Supertest ao lado das Cotações. Front: só estender mapper sna
 
 **Status:** ready-for-agent
 
-- [ ] Gestor lança um bloco (Fornecedor ativo + valor unitário > 0) e o detalhe lista esse Orçamento sob o Item certo, com nome do Fornecedor, unitário, total e `selecionada` falsa
-- [ ] GET Cotação por id devolve os Orçamentos aninhados no Item; quem já lê a Cotação vê; cliente sem token leva 401
-- [ ] Cotação `aberta` passa a `em_andamento` na mesma resposta do primeiro Orçamento; o badge do detalhe acompanha
-- [ ] Operador (e Prefeitura) lê e leva 403 em create; só `perfil === gestor` grava
-- [ ] Segundo Orçamento do mesmo Fornecedor no mesmo Item → 400 e nada novo persiste; o mesmo Fornecedor em **outro** Item da mesma Cotação é aceito
-- [ ] Cotação com vários Itens aceita Orçamento em só alguns; o Item sem preço permanece sem linhas
-- [ ] `valor_unitario` zero ou negativo, Fornecedor inexistente ou inativo, `item_id` de outra Cotação → 400 e nada persiste
-- [ ] Cotação `finalizada`, `cancelada` ou `ativo = false` recusa Orçamento novo; a UI do detalhe não oferece o modal nesses casos
-- [ ] `data_proposta` omitida no modal grava hoje no servidor; o modal pede só Fornecedor e valor unitário
-- [ ] Fornecedor inativo não aparece no select; não há cadastro de Fornecedor no modal
-- [ ] Listagem `/cotacoes` e filtros/relatórios que já usam as strings de status continuam iguais (sem contador `2/3`)
-- [ ] Não se grava Fornecedor no Item nem vencedor na Cotação inteira; envelope `selecionada` não escolhe vencedor
+- [x] Gestor lança um bloco (Fornecedor ativo + valor unitário > 0) e o detalhe lista esse Orçamento sob o Item certo, com nome do Fornecedor, unitário, total e `selecionada` falsa
+- [x] GET Cotação por id devolve os Orçamentos aninhados no Item; quem já lê a Cotação vê; cliente sem token leva 401
+- [x] Cotação `aberta` passa a `em_andamento` na mesma resposta do primeiro Orçamento; o badge do detalhe acompanha
+- [x] Operador (e Prefeitura) lê e leva 403 em create; só `perfil === gestor` grava
+- [x] Segundo Orçamento do mesmo Fornecedor no mesmo Item → 400 e nada novo persiste; o mesmo Fornecedor em **outro** Item da mesma Cotação é aceito
+- [x] Cotação com vários Itens aceita Orçamento em só alguns; o Item sem preço permanece sem linhas
+- [x] `valor_unitario` zero ou negativo, Fornecedor inexistente ou inativo, `item_id` de outra Cotação → 400 e nada persiste
+- [x] Cotação `finalizada`, `cancelada` ou `ativo = false` recusa Orçamento novo; a UI do detalhe não oferece o modal nesses casos
+- [x] `data_proposta` omitida no modal grava hoje no servidor; o modal pede só Fornecedor e valor unitário
+- [x] Fornecedor inativo não aparece no select; não há cadastro de Fornecedor no modal
+- [x] Listagem `/cotacoes` e filtros/relatórios que já usam as strings de status continuam iguais (sem contador `2/3`)
+- [x] Não se grava Fornecedor no Item nem vencedor na Cotação inteira; envelope `selecionada` não escolhe vencedor

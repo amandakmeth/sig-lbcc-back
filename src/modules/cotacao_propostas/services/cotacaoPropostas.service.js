@@ -1,4 +1,5 @@
 import supabase from "../../../config/supabase.js";
+import { aplicarStatusCotacaoPorFatos } from "../../cotacoes/services/cotacaoStatus.js";
 
 // =========================
 // LISTAR PROPOSTAS / ORÇAMENTOS
@@ -120,7 +121,7 @@ export const inserirProposta = async (dados) => {
     const { data: cotacao, error: cotacaoError } =
         await supabase
             .from("cotacoes")
-            .select("id, ativo")
+            .select("id, ativo, status")
             .eq("id", cotacao_id)
             .single();
 
@@ -136,6 +137,41 @@ export const inserirProposta = async (dados) => {
         return {
             error: {
                 message: "Não é possível registrar orçamento para uma cotação inativa"
+            }
+        };
+    }
+
+    if (
+        cotacao.status === "finalizada" ||
+        cotacao.status === "cancelada"
+    ) {
+        return {
+            error: {
+                message:
+                    "Não é possível registrar orçamento para uma cotação encerrada"
+            }
+        };
+    }
+
+    const { data: fornecedor, error: fornecedorError } =
+        await supabase
+            .from("fornecedores")
+            .select("id, ativo")
+            .eq("id", fornecedor_id)
+            .single();
+
+    if (fornecedorError || !fornecedor) {
+        return {
+            error: {
+                message: "Fornecedor não encontrado"
+            }
+        };
+    }
+
+    if (fornecedor.ativo === false) {
+        return {
+            error: {
+                message: "Fornecedor inativo não pode receber orçamento"
             }
         };
     }
@@ -178,6 +214,43 @@ export const inserirProposta = async (dados) => {
         };
     }
 
+    const { data: propostasExistentes, error: propostasExistentesError } =
+        await supabase
+            .from("cotacao_propostas")
+            .select(`
+                id,
+                fornecedor_id,
+                cotacao_proposta_itens (
+                    id,
+                    item_id
+                )
+            `)
+            .eq("cotacao_id", cotacao_id);
+
+    if (propostasExistentesError) {
+        return {
+            error: propostasExistentesError
+        };
+    }
+
+    const itemIdsSet = new Set(itemIds);
+
+    const duplicado = (propostasExistentes || []).some((proposta) =>
+        proposta.fornecedor_id === fornecedor_id &&
+        (proposta.cotacao_proposta_itens || []).some(
+            (linha) => itemIdsSet.has(linha.item_id)
+        )
+    );
+
+    if (duplicado) {
+        return {
+            error: {
+                message:
+                    "Já existe orçamento deste fornecedor neste item"
+            }
+        };
+    }
+
     // =========================
     // CALCULAR VALORES
     // =========================
@@ -190,9 +263,9 @@ export const inserirProposta = async (dados) => {
 
         const valorUnitario = Number(item.valor_unitario);
 
-        if (isNaN(valorUnitario) || valorUnitario < 0) {
+        if (isNaN(valorUnitario) || valorUnitario <= 0) {
             throw new Error(
-                "Valor unitário deve ser um número maior ou igual a zero"
+                "Valor unitário deve ser um número maior que zero"
             );
         }
 
@@ -268,6 +341,16 @@ export const inserirProposta = async (dados) => {
 
         return {
             error: itensPropostaError
+        };
+    }
+
+    const {
+        error: statusError
+    } = await aplicarStatusCotacaoPorFatos(cotacao_id);
+
+    if (statusError) {
+        return {
+            error: statusError
         };
     }
 
