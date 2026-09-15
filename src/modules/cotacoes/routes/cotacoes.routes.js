@@ -11,7 +11,11 @@ import {
     alterarStatusProgresso
 } from '../controllers/cotacoes.controller.js';
 
-import { createOrcamentosItem } from '../controllers/cotacaoOrcamentos.controller.js';
+import {
+    createOrcamentosItem,
+    updateOrcamentoItem,
+    deleteOrcamentoItem
+} from '../controllers/cotacaoOrcamentos.controller.js';
 
 import { authMiddleware } from '../../auth/middlewares/auth.middleware.js';
 
@@ -125,6 +129,98 @@ router.get('/:id', getCotacaoById);
 router.post(
     '/:id/itens/:itemId/orcamentos',
     createOrcamentosItem
+);
+
+/**
+ * @swagger
+ * /cotacoes/{id}/itens/{itemId}/orcamentos/{orcamentoId}:
+ *   put:
+ *     summary: Corrige o valor unitário de um orçamento
+ *     tags: [Cotações]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: itemId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: orcamentoId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - valor_unitario
+ *             properties:
+ *               valor_unitario:
+ *                 type: number
+ *                 minimum: 0.01
+ *     responses:
+ *       200:
+ *         description: Cotação com o orçamento corrigido
+ *       400:
+ *         description: Erro de validação
+ *       401:
+ *         description: Sem autenticação
+ *       403:
+ *         description: Sem permissão
+ */
+router.put(
+    '/:id/itens/:itemId/orcamentos/:orcamentoId',
+    updateOrcamentoItem
+);
+
+/**
+ * @swagger
+ * /cotacoes/{id}/itens/{itemId}/orcamentos/{orcamentoId}:
+ *   delete:
+ *     summary: Remove um orçamento do item
+ *     tags: [Cotações]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: itemId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: orcamentoId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Cotação sem o orçamento removido
+ *       400:
+ *         description: Erro de validação
+ *       401:
+ *         description: Sem autenticação
+ *       403:
+ *         description: Sem permissão
+ */
+router.delete(
+    '/:id/itens/:itemId/orcamentos/:orcamentoId',
+    deleteOrcamentoItem
 );
 
 

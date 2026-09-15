@@ -1,4 +1,8 @@
-import { inserirOrcamentosNoItem } from '../services/cotacaoOrcamentos.service.js';
+import {
+    inserirOrcamentosNoItem,
+    atualizarValorOrcamento,
+    removerOrcamento
+} from '../services/cotacaoOrcamentos.service.js';
 
 export const createOrcamentosItem = async (req, res) => {
 
@@ -39,6 +43,93 @@ export const createOrcamentosItem = async (req, res) => {
 
         return res.status(500).json({
             erro: err.message || 'Erro ao registrar orçamentos'
+        });
+
+    }
+};
+
+export const updateOrcamentoItem = async (req, res) => {
+
+    try {
+
+        if (req.user.perfil !== 'gestor') {
+            return res.status(403).json({
+                erro: 'Apenas gestor pode alterar orçamentos'
+            });
+        }
+
+        const { id, itemId, orcamentoId } = req.params;
+
+        const {
+            data,
+            error
+        } = await atualizarValorOrcamento({
+            cotacaoId: id,
+            itemId,
+            orcamentoId,
+            dados: req.body
+        });
+
+        if (error) {
+            return res.status(400).json({
+                erro: error.message || error
+            });
+        }
+
+        return res.status(200).json(data);
+
+    } catch (err) {
+
+        console.error(
+            'Erro ao alterar orçamento:',
+            err
+        );
+
+        return res.status(500).json({
+            erro: err.message || 'Erro ao alterar orçamento'
+        });
+
+    }
+};
+
+export const deleteOrcamentoItem = async (req, res) => {
+
+    try {
+
+        if (req.user.perfil !== 'gestor') {
+            return res.status(403).json({
+                erro: 'Apenas gestor pode apagar orçamentos'
+            });
+        }
+
+        const { id, itemId, orcamentoId } = req.params;
+
+        const {
+            data,
+            error
+        } = await removerOrcamento({
+            cotacaoId: id,
+            itemId,
+            orcamentoId
+        });
+
+        if (error) {
+            return res.status(400).json({
+                erro: error.message || error
+            });
+        }
+
+        return res.status(200).json(data);
+
+    } catch (err) {
+
+        console.error(
+            'Erro ao apagar orçamento:',
+            err
+        );
+
+        return res.status(500).json({
+            erro: err.message || 'Erro ao apagar orçamento'
         });
 
     }

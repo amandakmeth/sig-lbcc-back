@@ -311,6 +311,318 @@ export async function inserirOrcamentosNoItem({
     return buscarCotacaoPorId(cotacaoId);
 }
 
+export async function atualizarValorOrcamento({
+    cotacaoId,
+    itemId,
+    orcamentoId,
+    dados
+}) {
+    if (
+        dados
+        && Object.prototype.hasOwnProperty.call(dados, 'fornecedor_id')
+    ) {
+        return {
+            data: null,
+            error: {
+                message:
+                    'Não é permitido alterar o fornecedor do orçamento'
+            }
+        };
+    }
+
+    const valorUnitario = Number(dados?.valor_unitario);
+
+    if (Number.isNaN(valorUnitario) || valorUnitario <= 0) {
+        return {
+            data: null,
+            error: {
+                message:
+                    'Valor unitário deve ser um número maior que zero'
+            }
+        };
+    }
+
+    const {
+        data: contexto,
+        error: contextoError
+    } = await carregarLinhaOrcamento({
+        cotacaoId,
+        itemId,
+        orcamentoId
+    });
+
+    if (contextoError) {
+        return {
+            data: null,
+            error: contextoError
+        };
+    }
+
+    const { item, linha, envelope } = contexto;
+    const quantidade = Number(item.quantidade);
+    const valorTotal = quantidade * valorUnitario;
+    const delta = valorTotal - Number(linha.valor_total || 0);
+
+    const { error: erroLinha } = await supabase
+        .from('cotacao_proposta_itens')
+        .update({
+            valor_unitario: valorUnitario,
+            valor_total: valorTotal
+        })
+        .eq('id', orcamentoId);
+
+    if (erroLinha) {
+        return {
+            data: null,
+            error: erroLinha
+        };
+    }
+
+    if (delta !== 0) {
+        const { error: erroEnvelope } = await supabase
+            .from('cotacao_propostas')
+            .update({
+                valor_total: Number(envelope.valor_total || 0) + delta
+            })
+            .eq('id', envelope.id);
+
+        if (erroEnvelope) {
+            return {
+                data: null,
+                error: erroEnvelope
+            };
+        }
+    }
+
+    const {
+        error: statusError
+    } = await aplicarStatusCotacaoPorFatos(cotacaoId);
+
+    if (statusError) {
+        return {
+            data: null,
+            error: statusError
+        };
+    }
+
+    return buscarCotacaoPorId(cotacaoId);
+}
+
+export async function removerOrcamento({
+    cotacaoId,
+    itemId,
+    orcamentoId
+}) {
+    const {
+        data: contexto,
+        error: contextoError
+    } = await carregarLinhaOrcamento({
+        cotacaoId,
+        itemId,
+        orcamentoId
+    });
+
+    if (contextoError) {
+        return {
+            data: null,
+            error: contextoError
+        };
+    }
+
+    const { envelope } = contexto;
+
+    const { error: erroLinha } = await supabase
+        .from('cotacao_proposta_itens')
+        .delete()
+        .eq('id', orcamentoId);
+
+    if (erroLinha) {
+        return {
+            data: null,
+            error: erroLinha
+        };
+    }
+
+    const {
+        data: linhasRestantes,
+        error: linhasError
+    } = await supabase
+        .from('cotacao_proposta_itens')
+        .select('id, valor_total')
+        .eq('proposta_id', envelope.id);
+
+    if (linhasError) {
+        return {
+            data: null,
+            error: linhasError
+        };
+    }
+
+    if (!linhasRestantes || linhasRestantes.length === 0) {
+        const { error: erroEnvelope } = await supabase
+            .from('cotacao_propostas')
+            .delete()
+            .eq('id', envelope.id);
+
+        if (erroEnvelope) {
+            return {
+                data: null,
+                error: erroEnvelope
+            };
+        }
+    } else {
+        const valorTotal = linhasRestantes.reduce(
+            (soma, restante) => soma + Number(restante.valor_total || 0),
+            0
+        );
+
+        const { error: erroEnvelope } = await supabase
+            .from('cotacao_propostas')
+            .update({
+                valor_total: valorTotal
+            })
+            .eq('id', envelope.id);
+
+        if (erroEnvelope) {
+            return {
+                data: null,
+                error: erroEnvelope
+            };
+        }
+    }
+
+    const {
+        error: statusError
+    } = await aplicarStatusCotacaoPorFatos(cotacaoId);
+
+    if (statusError) {
+        return {
+            data: null,
+            error: statusError
+        };
+    }
+
+    return buscarCotacaoPorId(cotacaoId);
+}
+
+async function carregarLinhaOrcamento({
+    cotacaoId,
+    itemId,
+    orcamentoId
+}) {
+    const {
+        data: cotacao,
+        error: cotacaoError
+    } = await supabase
+        .from('cotacoes')
+        .select('id, ativo, status')
+        .eq('id', cotacaoId)
+        .single();
+
+    if (cotacaoError || !cotacao) {
+        return {
+            data: null,
+            error: {
+                message: 'Cotação não encontrada'
+            }
+        };
+    }
+
+    if (!cotacao.ativo) {
+        return {
+            data: null,
+            error: {
+                message:
+                    'Não é possível alterar orçamento de uma cotação inativa'
+            }
+        };
+    }
+
+    if (
+        cotacao.status === 'finalizada' ||
+        cotacao.status === 'cancelada'
+    ) {
+        return {
+            data: null,
+            error: {
+                message:
+                    'Não é possível alterar orçamento de uma cotação encerrada'
+            }
+        };
+    }
+
+    const {
+        data: item,
+        error: itemError
+    } = await supabase
+        .from('cotacao_itens')
+        .select('id, cotacao_id, quantidade')
+        .eq('id', itemId)
+        .single();
+
+    if (itemError || !item || item.cotacao_id !== cotacaoId) {
+        return {
+            data: null,
+            error: {
+                message:
+                    'O item informado não pertence à cotação'
+            }
+        };
+    }
+
+    const {
+        data: linha,
+        error: linhaError
+    } = await supabase
+        .from('cotacao_proposta_itens')
+        .select('id, item_id, proposta_id, valor_unitario, valor_total')
+        .eq('id', orcamentoId)
+        .single();
+
+    if (linhaError || !linha || linha.item_id !== itemId) {
+        return {
+            data: null,
+            error: {
+                message:
+                    'O orçamento informado não pertence ao item'
+            }
+        };
+    }
+
+    const {
+        data: envelope,
+        error: envelopeError
+    } = await supabase
+        .from('cotacao_propostas')
+        .select('id, cotacao_id, fornecedor_id, valor_total')
+        .eq('id', linha.proposta_id)
+        .single();
+
+    if (
+        envelopeError
+        || !envelope
+        || envelope.cotacao_id !== cotacaoId
+    ) {
+        return {
+            data: null,
+            error: {
+                message:
+                    'O orçamento informado não pertence ao item'
+            }
+        };
+    }
+
+    return {
+        data: {
+            cotacao,
+            item,
+            linha,
+            envelope
+        },
+        error: null
+    };
+}
+
 async function removerEnvelopes(ids) {
     if (!ids.length) {
         return;

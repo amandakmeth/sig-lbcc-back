@@ -8,9 +8,9 @@ A função de status é a mesma do ticket 02. Zerar vencedor ao cair abaixo de t
 
 **Status:** ready-for-agent
 
-- [ ] Gestor corrige o valor unitário (> 0) no detalhe; `valor_total` recalcula; Fornecedor da linha permanece
-- [ ] Tentativa de alterar `fornecedor_id` no Orçamento é recusada (troca = delete + create)
-- [ ] Gestor apaga um Orçamento em Cotação não terminal; a linha some da lista; envelope sem linhas é removido
-- [ ] Apagar o último Orçamento da Cotação devolve status `aberta` na resposta e no badge
-- [ ] Operador leva 403 em editar e apagar; Cotação terminal ou `ativo = false` recusa; a UI não oferece editar/apagar no terminal
-- [ ] React Query do detalhe invalida depois de editar e apagar
+- [x] Gestor corrige o valor unitário (> 0) no detalhe; `valor_total` recalcula; Fornecedor da linha permanece
+- [x] Tentativa de alterar `fornecedor_id` no Orçamento é recusada (troca = delete + create)
+- [x] Gestor apaga um Orçamento em Cotação não terminal; a linha some da lista; envelope sem linhas é removido
+- [x] Apagar o último Orçamento da Cotação devolve status `aberta` na resposta e no badge
+- [x] Operador leva 403 em editar e apagar; Cotação terminal ou `ativo = false` recusa; a UI não oferece editar/apagar no terminal
+- [x] React Query do detalhe invalida depois de editar e apagar

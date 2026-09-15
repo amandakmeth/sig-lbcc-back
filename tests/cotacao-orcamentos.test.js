@@ -154,6 +154,32 @@ function postOrcamentos(token, cotacaoId, itemId, blocos) {
     return req.send(blocos);
 }
 
+function putOrcamento(token, cotacaoId, itemId, orcamentoId, body) {
+    const req = request(app)
+        .put(
+            `/cotacoes/${cotacaoId}/itens/${itemId}/orcamentos/${orcamentoId}`
+        );
+
+    if (token) {
+        req.set('Authorization', `Bearer ${token}`);
+    }
+
+    return req.send(body);
+}
+
+function deleteOrcamento(token, cotacaoId, itemId, orcamentoId) {
+    const req = request(app)
+        .delete(
+            `/cotacoes/${cotacaoId}/itens/${itemId}/orcamentos/${orcamentoId}`
+        );
+
+    if (token) {
+        req.set('Authorization', `Bearer ${token}`);
+    }
+
+    return req;
+}
+
 async function inativarFornecedor(id) {
     const res = await request(app)
         .patch(`/fornecedores/${id}/status`)
@@ -969,5 +995,533 @@ describe('Orçamentos no Item da Cotação', () => {
 
         expect(detalhe.body.status).toBe('aberta');
         expect(itemOrcamentos(detalhe.body, itemId)).toHaveLength(0);
+    });
+
+    it('gestor corrige o valor unitário; o total recalcula e o fornecedor permanece', async () => {
+        const cotacao = await criarCotacao([
+            {
+                descricao: 'Item correção',
+                quantidade: 2,
+                unidade: 'UN'
+            }
+        ]);
+
+        const itemId = cotacao.cotacao_itens[0].id;
+
+        const criado = await postOrcamentos(
+            tokenGestor,
+            cotacao.id,
+            itemId,
+            [
+                {
+                    fornecedor_id: fornecedorA.id,
+                    valor_unitario: 10
+                }
+            ]
+        );
+
+        expect(criado.statusCode).toBe(201);
+
+        const orcamentoId = itemOrcamentos(criado.body, itemId)[0].id;
+
+        const res = await putOrcamento(
+            tokenGestor,
+            cotacao.id,
+            itemId,
+            orcamentoId,
+            {
+                valor_unitario: 15
+            }
+        );
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.status).toBe('em_andamento');
+
+        const orcamentos = itemOrcamentos(res.body, itemId);
+
+        expect(orcamentos).toHaveLength(1);
+        expect(orcamentos[0]).toEqual(
+            expect.objectContaining({
+                id: orcamentoId,
+                fornecedor_id: fornecedorA.id,
+                fornecedor_nome: 'Farmacia Central',
+                valor_unitario: 15,
+                valor_total: 30,
+                selecionada: false
+            })
+        );
+
+        const detalhe = await request(app)
+            .get(`/cotacoes/${cotacao.id}`)
+            .set('Authorization', `Bearer ${tokenGestor}`);
+
+        expect(detalhe.statusCode).toBe(200);
+        expect(itemOrcamentos(detalhe.body, itemId)[0]).toEqual(
+            expect.objectContaining({
+                fornecedor_id: fornecedorA.id,
+                valor_unitario: 15,
+                valor_total: 30
+            })
+        );
+    });
+
+    it('tentativa de alterar o fornecedor do orçamento é recusada', async () => {
+        const cotacao = await criarCotacao([
+            {
+                descricao: 'Item fornecedor fixo',
+                quantidade: 1,
+                unidade: 'UN'
+            }
+        ]);
+
+        const itemId = cotacao.cotacao_itens[0].id;
+
+        const criado = await postOrcamentos(
+            tokenGestor,
+            cotacao.id,
+            itemId,
+            [
+                {
+                    fornecedor_id: fornecedorA.id,
+                    valor_unitario: 10
+                }
+            ]
+        );
+
+        expect(criado.statusCode).toBe(201);
+
+        const orcamento = itemOrcamentos(criado.body, itemId)[0];
+
+        const res = await putOrcamento(
+            tokenGestor,
+            cotacao.id,
+            itemId,
+            orcamento.id,
+            {
+                fornecedor_id: fornecedorB.id,
+                valor_unitario: 12
+            }
+        );
+
+        expect(res.statusCode).toBe(400);
+
+        const detalhe = await request(app)
+            .get(`/cotacoes/${cotacao.id}`)
+            .set('Authorization', `Bearer ${tokenGestor}`);
+
+        expect(itemOrcamentos(detalhe.body, itemId)).toHaveLength(1);
+        expect(itemOrcamentos(detalhe.body, itemId)[0]).toEqual(
+            expect.objectContaining({
+                id: orcamento.id,
+                fornecedor_id: fornecedorA.id,
+                valor_unitario: 10,
+                valor_total: 10
+            })
+        );
+    });
+
+    it('valor unitário zero ou negativo na correção é recusado e o lançamento permanece', async () => {
+        const cotacao = await criarCotacao([
+            {
+                descricao: 'Item valor inválido',
+                quantidade: 2,
+                unidade: 'UN'
+            }
+        ]);
+
+        const itemId = cotacao.cotacao_itens[0].id;
+
+        const criado = await postOrcamentos(
+            tokenGestor,
+            cotacao.id,
+            itemId,
+            [
+                {
+                    fornecedor_id: fornecedorA.id,
+                    valor_unitario: 10
+                }
+            ]
+        );
+
+        const orcamentoId = itemOrcamentos(criado.body, itemId)[0].id;
+
+        const zero = await putOrcamento(
+            tokenGestor,
+            cotacao.id,
+            itemId,
+            orcamentoId,
+            {
+                valor_unitario: 0
+            }
+        );
+
+        expect(zero.statusCode).toBe(400);
+
+        const negativo = await putOrcamento(
+            tokenGestor,
+            cotacao.id,
+            itemId,
+            orcamentoId,
+            {
+                valor_unitario: -3
+            }
+        );
+
+        expect(negativo.statusCode).toBe(400);
+
+        const detalhe = await request(app)
+            .get(`/cotacoes/${cotacao.id}`)
+            .set('Authorization', `Bearer ${tokenGestor}`);
+
+        expect(itemOrcamentos(detalhe.body, itemId)[0]).toEqual(
+            expect.objectContaining({
+                valor_unitario: 10,
+                valor_total: 20
+            })
+        );
+    });
+
+    it('gestor apaga um orçamento; a linha some e o envelope sem linhas é removido', async () => {
+        const cotacao = await criarCotacao([
+            {
+                descricao: 'Item apagar',
+                quantidade: 2,
+                unidade: 'UN'
+            }
+        ]);
+
+        const itemId = cotacao.cotacao_itens[0].id;
+
+        const criado = await postOrcamentos(
+            tokenGestor,
+            cotacao.id,
+            itemId,
+            [
+                {
+                    fornecedor_id: fornecedorA.id,
+                    valor_unitario: 10
+                },
+                {
+                    fornecedor_id: fornecedorB.id,
+                    valor_unitario: 8
+                }
+            ]
+        );
+
+        expect(criado.statusCode).toBe(201);
+
+        const orcamentoA = itemOrcamentos(criado.body, itemId).find(
+            (orcamento) => orcamento.fornecedor_id === fornecedorA.id
+        );
+
+        const res = await deleteOrcamento(
+            tokenGestor,
+            cotacao.id,
+            itemId,
+            orcamentoA.id
+        );
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.status).toBe('em_andamento');
+        expect(itemOrcamentos(res.body, itemId)).toHaveLength(1);
+        expect(itemOrcamentos(res.body, itemId)[0]).toEqual(
+            expect.objectContaining({
+                fornecedor_id: fornecedorB.id,
+                valor_unitario: 8,
+                valor_total: 16
+            })
+        );
+
+        const propostas = await request(app)
+            .get('/cotacao-propostas')
+            .query({ cotacao_id: cotacao.id })
+            .set('Authorization', `Bearer ${tokenGestor}`);
+
+        expect(propostas.statusCode).toBe(200);
+
+        const envelopes = (propostas.body || []).filter(
+            (proposta) => proposta.cotacao_id === cotacao.id
+        );
+
+        expect(envelopes).toHaveLength(1);
+        expect(envelopes[0].fornecedor_id).toBe(fornecedorB.id);
+        expect(envelopes[0].cotacao_proposta_itens).toHaveLength(1);
+    });
+
+    it('apagar o último orçamento da cotação devolve status aberta', async () => {
+        const cotacao = await criarCotacao([
+            {
+                descricao: 'Item último',
+                quantidade: 1,
+                unidade: 'UN'
+            }
+        ]);
+
+        const itemId = cotacao.cotacao_itens[0].id;
+
+        const criado = await postOrcamentos(
+            tokenGestor,
+            cotacao.id,
+            itemId,
+            [
+                {
+                    fornecedor_id: fornecedorA.id,
+                    valor_unitario: 9
+                }
+            ]
+        );
+
+        expect(criado.statusCode).toBe(201);
+        expect(criado.body.status).toBe('em_andamento');
+
+        const orcamentoId = itemOrcamentos(criado.body, itemId)[0].id;
+
+        const res = await deleteOrcamento(
+            tokenGestor,
+            cotacao.id,
+            itemId,
+            orcamentoId
+        );
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.status).toBe('aberta');
+        expect(itemOrcamentos(res.body, itemId)).toHaveLength(0);
+
+        const detalhe = await request(app)
+            .get(`/cotacoes/${cotacao.id}`)
+            .set('Authorization', `Bearer ${tokenGestor}`);
+
+        expect(detalhe.statusCode).toBe(200);
+        expect(detalhe.body.status).toBe('aberta');
+        expect(itemOrcamentos(detalhe.body, itemId)).toHaveLength(0);
+
+        const propostas = await request(app)
+            .get('/cotacao-propostas')
+            .query({ cotacao_id: cotacao.id })
+            .set('Authorization', `Bearer ${tokenGestor}`);
+
+        const envelopes = (propostas.body || []).filter(
+            (proposta) => proposta.cotacao_id === cotacao.id
+        );
+
+        expect(envelopes).toHaveLength(0);
+    });
+
+    it('operador leva 403 ao editar e ao apagar orçamento', async () => {
+        const cotacao = await criarCotacao([
+            {
+                descricao: 'Item operador',
+                quantidade: 1,
+                unidade: 'UN'
+            }
+        ]);
+
+        const itemId = cotacao.cotacao_itens[0].id;
+
+        const criado = await postOrcamentos(
+            tokenGestor,
+            cotacao.id,
+            itemId,
+            [
+                {
+                    fornecedor_id: fornecedorA.id,
+                    valor_unitario: 10
+                }
+            ]
+        );
+
+        const orcamentoId = itemOrcamentos(criado.body, itemId)[0].id;
+
+        const editar = await putOrcamento(
+            tokenOperador,
+            cotacao.id,
+            itemId,
+            orcamentoId,
+            {
+                valor_unitario: 20
+            }
+        );
+
+        expect(editar.statusCode).toBe(403);
+
+        const apagar = await deleteOrcamento(
+            tokenOperador,
+            cotacao.id,
+            itemId,
+            orcamentoId
+        );
+
+        expect(apagar.statusCode).toBe(403);
+
+        const detalhe = await request(app)
+            .get(`/cotacoes/${cotacao.id}`)
+            .set('Authorization', `Bearer ${tokenGestor}`);
+
+        expect(itemOrcamentos(detalhe.body, itemId)).toHaveLength(1);
+        expect(itemOrcamentos(detalhe.body, itemId)[0]).toEqual(
+            expect.objectContaining({
+                valor_unitario: 10,
+                valor_total: 10
+            })
+        );
+    });
+
+    it('cotação finalizada, cancelada ou inativa recusa editar e apagar orçamento', async () => {
+        const itens = [
+            {
+                descricao: 'Item terminal',
+                quantidade: 1,
+                unidade: 'UN'
+            }
+        ];
+
+        const finalizada = await criarCotacao(itens);
+        const itemFinalizada = finalizada.cotacao_itens[0].id;
+
+        const orcamentoFinalizada = await postOrcamentos(
+            tokenGestor,
+            finalizada.id,
+            itemFinalizada,
+            [
+                {
+                    fornecedor_id: fornecedorA.id,
+                    valor_unitario: 10
+                }
+            ]
+        );
+
+        expect(orcamentoFinalizada.statusCode).toBe(201);
+
+        const idFinalizada = itemOrcamentos(
+            orcamentoFinalizada.body,
+            itemFinalizada
+        )[0].id;
+
+        const patchFinalizada = await request(app)
+            .patch(`/cotacoes/${finalizada.id}/status-progresso`)
+            .set('Authorization', `Bearer ${tokenGestor}`)
+            .send({
+                status: 'finalizada'
+            });
+
+        expect(patchFinalizada.statusCode).toBe(200);
+
+        const editarFinalizada = await putOrcamento(
+            tokenGestor,
+            finalizada.id,
+            itemFinalizada,
+            idFinalizada,
+            {
+                valor_unitario: 20
+            }
+        );
+
+        expect(editarFinalizada.statusCode).toBe(400);
+
+        const apagarFinalizada = await deleteOrcamento(
+            tokenGestor,
+            finalizada.id,
+            itemFinalizada,
+            idFinalizada
+        );
+
+        expect(apagarFinalizada.statusCode).toBe(400);
+
+        const cancelada = await criarCotacao(itens);
+        const itemCancelada = cancelada.cotacao_itens[0].id;
+
+        const orcamentoCancelada = await postOrcamentos(
+            tokenGestor,
+            cancelada.id,
+            itemCancelada,
+            [
+                {
+                    fornecedor_id: fornecedorA.id,
+                    valor_unitario: 10
+                }
+            ]
+        );
+
+        const idCancelada = itemOrcamentos(
+            orcamentoCancelada.body,
+            itemCancelada
+        )[0].id;
+
+        const del = await request(app)
+            .delete(`/cotacoes/${cancelada.id}`)
+            .set('Authorization', `Bearer ${tokenGestor}`)
+            .send({
+                motivo_cancelamento: 'Cancelada para recusar correção'
+            });
+
+        expect(del.statusCode).toBe(200);
+
+        const editarCancelada = await putOrcamento(
+            tokenGestor,
+            cancelada.id,
+            itemCancelada,
+            idCancelada,
+            {
+                valor_unitario: 20
+            }
+        );
+
+        expect(editarCancelada.statusCode).toBe(400);
+
+        const apagarCancelada = await deleteOrcamento(
+            tokenGestor,
+            cancelada.id,
+            itemCancelada,
+            idCancelada
+        );
+
+        expect(apagarCancelada.statusCode).toBe(400);
+
+        const inativa = await criarCotacao(itens);
+        const itemInativa = inativa.cotacao_itens[0].id;
+
+        const orcamentoInativa = await postOrcamentos(
+            tokenGestor,
+            inativa.id,
+            itemInativa,
+            [
+                {
+                    fornecedor_id: fornecedorA.id,
+                    valor_unitario: 10
+                }
+            ]
+        );
+
+        const idInativa = itemOrcamentos(
+            orcamentoInativa.body,
+            itemInativa
+        )[0].id;
+
+        const toggle = await request(app)
+            .patch(`/cotacoes/${inativa.id}/status`)
+            .set('Authorization', `Bearer ${tokenGestor}`);
+
+        expect(toggle.statusCode).toBe(200);
+
+        const editarInativa = await putOrcamento(
+            tokenGestor,
+            inativa.id,
+            itemInativa,
+            idInativa,
+            {
+                valor_unitario: 20
+            }
+        );
+
+        expect(editarInativa.statusCode).toBe(400);
+
+        const apagarInativa = await deleteOrcamento(
+            tokenGestor,
+            inativa.id,
+            itemInativa,
+            idInativa
+        );
+
+        expect(apagarInativa.statusCode).toBe(400);
     });
 });
