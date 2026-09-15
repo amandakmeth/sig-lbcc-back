@@ -8,8 +8,8 @@ Filtros e relatórios que já leem as strings de status continuam funcionando qu
 
 **Status:** ready-for-agent
 
-- [ ] PATCH status-progresso com `aberta` | `em_andamento` | `pronta_para_analise` | `finalizada` → 400; o status da Cotação não muda
-- [ ] Cancelar Cotação não terminal com `status: cancelada` e motivo não vazio funciona; motivo ausente ou só espaço → 400 e a Cotação não cancela
-- [ ] Cotação `finalizada` ou `cancelada` recusa Orçamento novo/editar/apagar, troca de vencedor e mudança de Item (nenhum buraco restante)
-- [ ] POST antigo de proposta (um Fornecedor, N Itens), se a rota permanecer, recusa o que o lote por Item recusaria e aplica a mesma função de status; se o lote falharia, nada persiste
-- [ ] Listagem e relatórios que já filtram por `pronta_para_analise` / `finalizada` passam a ver Cotações que a máquina colocou nesses status, sem coluna ou contador novo
+- [x] PATCH status-progresso com `aberta` | `em_andamento` | `pronta_para_analise` | `finalizada` → 400; o status da Cotação não muda
+- [x] Cancelar Cotação não terminal com `status: cancelada` e motivo não vazio funciona; motivo ausente ou só espaço → 400 e a Cotação não cancela
+- [x] Cotação `finalizada` ou `cancelada` recusa Orçamento novo/editar/apagar, troca de vencedor e mudança de Item (nenhum buraco restante)
+- [x] POST antigo de proposta (um Fornecedor, N Itens), se a rota permanecer, recusa o que o lote por Item recusaria e aplica a mesma função de status; se o lote falharia, nada persiste
+- [x] Listagem e relatórios que já filtram por `pronta_para_analise` / `finalizada` passam a ver Cotações que a máquina colocou nesses status, sem coluna ou contador novo

@@ -354,7 +354,7 @@ router.post('/', createCotacao);
  * /cotacoes/{id}:
  *   put:
  *     summary: Atualiza os dados de uma cotação
- *     description: Atualiza somente os dados cadastrais da cotação. O status de progresso deve ser alterado exclusivamente pela rota status-progresso.
+ *     description: Atualiza somente os dados cadastrais da cotação. O status de progresso não é alterado aqui; cancelar permanece na rota status-progresso ou no DELETE lógico.
  *     tags: [Cotações]
  *     parameters:
  *       - in: path
@@ -437,7 +437,7 @@ router.patch('/:id/status', toggleStatusCotacao);
  * /cotacoes/{id}/status-progresso:
  *   patch:
  *     summary: Altera o status de progresso da cotação
- *     description: Altera o status do processo da cotação. Para cancelar, o motivo_cancelamento é obrigatório. Cotações finalizadas ou canceladas não podem ter seu status alterado novamente.
+ *     description: Cancela a cotação. O único status aceito nesta rota é cancelada, com motivo_cancelamento obrigatório. aberta, em_andamento, pronta_para_analise e finalizada são recusados. Cotações finalizadas ou canceladas não podem ter seu status alterado novamente.
  *     tags: [Cotações]
  *     parameters:
  *       - in: path
@@ -459,12 +459,8 @@ router.patch('/:id/status', toggleStatusCotacao);
  *               status:
  *                 type: string
  *                 enum:
- *                   - aberta
- *                   - em_andamento
- *                   - pronta_para_analise
- *                   - finalizada
  *                   - cancelada
- *                 example: em_andamento
+ *                 example: cancelada
  *               motivo_cancelamento:
  *                 type: string
  *                 description: Motivo obrigatório quando o status for cancelada.

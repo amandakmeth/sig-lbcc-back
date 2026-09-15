@@ -285,6 +285,36 @@ async function tornarFinalizada(cotacao) {
     };
 }
 
+function patchStatusProgresso(token, cotacaoId, body) {
+    const req = request(app)
+        .patch(`/cotacoes/${cotacaoId}/status-progresso`);
+
+    if (token) {
+        req.set('Authorization', `Bearer ${token}`);
+    }
+
+    return req.send(body);
+}
+
+function postPropostaAntiga(token, body) {
+    const req = request(app).post('/cotacao-propostas');
+
+    if (token) {
+        req.set('Authorization', `Bearer ${token}`);
+    }
+
+    return req.send(body);
+}
+
+function payloadPropostaAntiga({ cotacaoId, fornecedorId, itens }) {
+    return {
+        cotacao_id: cotacaoId,
+        fornecedor_id: fornecedorId,
+        data_proposta: new Date().toISOString().slice(0, 10),
+        itens
+    };
+}
+
 async function inativarFornecedor(id) {
     const res = await request(app)
         .patch(`/fornecedores/${id}/status`)
@@ -2587,6 +2617,100 @@ describe('Orçamentos no Item da Cotação', () => {
         expect(itemOrcamentos(detalheCadastro.body, itemId)).toHaveLength(1);
     });
 
+    it('PATCH de status-progresso recusa aberta, em_andamento, pronta_para_analise e finalizada e não muda o status', async () => {
+        const cotacao = await criarCotacao([
+            {
+                descricao: 'Item atalho',
+                quantidade: 1,
+                unidade: 'UN'
+            }
+        ]);
+
+        expect(cotacao.status).toBe('aberta');
+
+        for (const status of [
+            'aberta',
+            'em_andamento',
+            'pronta_para_analise',
+            'finalizada'
+        ]) {
+            const res = await patchStatusProgresso(
+                tokenGestor,
+                cotacao.id,
+                { status }
+            );
+
+            expect(res.statusCode).toBe(400);
+        }
+
+        const detalhe = await getCotacao(tokenGestor, cotacao.id);
+
+        expect(detalhe.body.status).toBe('aberta');
+    });
+
+    it('cancela cotação não terminal com motivo; motivo ausente ou só espaço não cancela', async () => {
+        const cotacao = await criarCotacao([
+            {
+                descricao: 'Item cancelamento',
+                quantidade: 1,
+                unidade: 'UN'
+            }
+        ]);
+
+        const semMotivo = await patchStatusProgresso(
+            tokenGestor,
+            cotacao.id,
+            {
+                status: 'cancelada'
+            }
+        );
+
+        expect(semMotivo.statusCode).toBe(400);
+
+        const soEspaco = await patchStatusProgresso(
+            tokenGestor,
+            cotacao.id,
+            {
+                status: 'cancelada',
+                motivo_cancelamento: '   '
+            }
+        );
+
+        expect(soEspaco.statusCode).toBe(400);
+
+        const deleteSemMotivo = await request(app)
+            .delete(`/cotacoes/${cotacao.id}`)
+            .set('Authorization', `Bearer ${tokenGestor}`)
+            .send({
+                motivo_cancelamento: '   '
+            });
+
+        expect(deleteSemMotivo.statusCode).toBe(400);
+
+        const aindaAberta = await getCotacao(tokenGestor, cotacao.id);
+
+        expect(aindaAberta.body.status).toBe('aberta');
+
+        const cancelar = await patchStatusProgresso(
+            tokenGestor,
+            cotacao.id,
+            {
+                status: 'cancelada',
+                motivo_cancelamento: 'Cancelada com motivo obrigatório'
+            }
+        );
+
+        expect(cancelar.statusCode).toBe(200);
+        expect(cancelar.body.data.status).toBe('cancelada');
+        expect(cancelar.body.data.motivo_cancelamento).toBe(
+            'Cancelada com motivo obrigatório'
+        );
+
+        const detalhe = await getCotacao(tokenGestor, cotacao.id);
+
+        expect(detalhe.body.status).toBe('cancelada');
+    });
+
     it('cotação finalizada ou cancelada recusa criar, alterar e apagar item', async () => {
         const criadaFinalizada = await criarCotacao([
             {
@@ -2689,4 +2813,395 @@ describe('Orçamentos no Item da Cotação', () => {
         expect(detalheCancelada.body.cotacao_itens).toHaveLength(1);
     });
 
+    it('POST antigo recusa operador, valor inválido e duplicata; se o lote falharia nada persiste', async () => {
+        const cotacao = await criarCotacao([
+            {
+                descricao: 'Item A',
+                quantidade: 2,
+                unidade: 'UN'
+            },
+            {
+                descricao: 'Item B',
+                quantidade: 3,
+                unidade: 'UN'
+            }
+        ]);
+
+        const itemA = cotacao.cotacao_itens[0].id;
+        const itemB = cotacao.cotacao_itens[1].id;
+
+        const operador = await postPropostaAntiga(
+            tokenOperador,
+            payloadPropostaAntiga({
+                cotacaoId: cotacao.id,
+                fornecedorId: fornecedorA.id,
+                itens: [
+                    {
+                        item_id: itemA,
+                        valor_unitario: 10
+                    }
+                ]
+            })
+        );
+
+        expect(operador.statusCode).toBe(403);
+
+        const valorInvalido = await postPropostaAntiga(
+            tokenGestor,
+            payloadPropostaAntiga({
+                cotacaoId: cotacao.id,
+                fornecedorId: fornecedorA.id,
+                itens: [
+                    {
+                        item_id: itemA,
+                        valor_unitario: 10
+                    },
+                    {
+                        item_id: itemB,
+                        valor_unitario: 0
+                    }
+                ]
+            })
+        );
+
+        expect(valorInvalido.statusCode).toBe(400);
+
+        const detalheVazio = await getCotacao(tokenGestor, cotacao.id);
+
+        expect(detalheVazio.body.status).toBe('aberta');
+        expect(itemOrcamentos(detalheVazio.body, itemA)).toHaveLength(0);
+        expect(itemOrcamentos(detalheVazio.body, itemB)).toHaveLength(0);
+
+        const valido = await postPropostaAntiga(
+            tokenGestor,
+            payloadPropostaAntiga({
+                cotacaoId: cotacao.id,
+                fornecedorId: fornecedorA.id,
+                itens: [
+                    {
+                        item_id: itemA,
+                        valor_unitario: 10
+                    },
+                    {
+                        item_id: itemB,
+                        valor_unitario: 20
+                    }
+                ]
+            })
+        );
+
+        expect(valido.statusCode).toBe(201);
+
+        const duplicata = await postPropostaAntiga(
+            tokenGestor,
+            payloadPropostaAntiga({
+                cotacaoId: cotacao.id,
+                fornecedorId: fornecedorA.id,
+                itens: [
+                    {
+                        item_id: itemA,
+                        valor_unitario: 15
+                    }
+                ]
+            })
+        );
+
+        expect(duplicata.statusCode).toBe(400);
+
+        const detalhe = await getCotacao(tokenGestor, cotacao.id);
+
+        expect(detalhe.body.status).toBe('em_andamento');
+        expect(itemOrcamentos(detalhe.body, itemA)).toHaveLength(1);
+        expect(itemOrcamentos(detalhe.body, itemB)).toHaveLength(1);
+        expect(itemOrcamentos(detalhe.body, itemA)[0].valor_unitario).toBe(10);
+    });
+
+    it('POST antigo deriva o status pela mesma função e recusa cotação terminal ou inativa', async () => {
+        const cotacao = await criarCotacao([
+            {
+                descricao: 'Item único antigo',
+                quantidade: 1,
+                unidade: 'UN'
+            }
+        ]);
+        const itemId = cotacao.cotacao_itens[0].id;
+
+        for (const fornecedor of [fornecedorA, fornecedorB, fornecedorC]) {
+            const res = await postPropostaAntiga(
+                tokenGestor,
+                payloadPropostaAntiga({
+                    cotacaoId: cotacao.id,
+                    fornecedorId: fornecedor.id,
+                    itens: [
+                        {
+                            item_id: itemId,
+                            valor_unitario: 10
+                        }
+                    ]
+                })
+            );
+
+            expect(res.statusCode).toBe(201);
+        }
+
+        const pronta = await getCotacao(tokenGestor, cotacao.id);
+
+        expect(pronta.body.status).toBe('pronta_para_analise');
+        expect(itemOrcamentos(pronta.body, itemId)).toHaveLength(3);
+
+        const criadaFinalizada = await criarCotacao([
+            {
+                descricao: 'Item terminal antigo',
+                quantidade: 1,
+                unidade: 'UN'
+            }
+        ]);
+        const { cotacao: finalizada, itemId: itemFinalizada } =
+            await tornarFinalizada(criadaFinalizada);
+
+        const recusaFinalizada = await postPropostaAntiga(
+            tokenGestor,
+            payloadPropostaAntiga({
+                cotacaoId: finalizada.id,
+                fornecedorId: fornecedorD.id,
+                itens: [
+                    {
+                        item_id: itemFinalizada,
+                        valor_unitario: 10
+                    }
+                ]
+            })
+        );
+
+        expect(recusaFinalizada.statusCode).toBe(400);
+
+        const cancelada = await criarCotacao([
+            {
+                descricao: 'Item cancelado antigo',
+                quantidade: 1,
+                unidade: 'UN'
+            }
+        ]);
+
+        const del = await request(app)
+            .delete(`/cotacoes/${cancelada.id}`)
+            .set('Authorization', `Bearer ${tokenGestor}`)
+            .send({
+                motivo_cancelamento: 'Cancelada para recusar POST antigo'
+            });
+
+        expect(del.statusCode).toBe(200);
+
+        const recusaCancelada = await postPropostaAntiga(
+            tokenGestor,
+            payloadPropostaAntiga({
+                cotacaoId: cancelada.id,
+                fornecedorId: fornecedorA.id,
+                itens: [
+                    {
+                        item_id: cancelada.cotacao_itens[0].id,
+                        valor_unitario: 10
+                    }
+                ]
+            })
+        );
+
+        expect(recusaCancelada.statusCode).toBe(400);
+
+        const inativa = await criarCotacao([
+            {
+                descricao: 'Item inativo antigo',
+                quantidade: 1,
+                unidade: 'UN'
+            }
+        ]);
+
+        const toggle = await request(app)
+            .patch(`/cotacoes/${inativa.id}/status`)
+            .set('Authorization', `Bearer ${tokenGestor}`);
+
+        expect(toggle.statusCode).toBe(200);
+
+        const recusaInativa = await postPropostaAntiga(
+            tokenGestor,
+            payloadPropostaAntiga({
+                cotacaoId: inativa.id,
+                fornecedorId: fornecedorA.id,
+                itens: [
+                    {
+                        item_id: inativa.cotacao_itens[0].id,
+                        valor_unitario: 10
+                    }
+                ]
+            })
+        );
+
+        expect(recusaInativa.statusCode).toBe(400);
+
+        const detalheFinalizada = await getCotacao(
+            tokenGestor,
+            finalizada.id
+        );
+
+        expect(detalheFinalizada.body.status).toBe('finalizada');
+        expect(itemOrcamentos(detalheFinalizada.body, itemFinalizada))
+            .toHaveLength(3);
+    });
+
+    it('listagem mostra cotações que a máquina colocou em pronta_para_analise e finalizada', async () => {
+        const cotacaoPronta = await criarCotacao([
+            {
+                descricao: 'Item listagem pronta',
+                quantidade: 1,
+                unidade: 'UN'
+            }
+        ]);
+        const itemPronta = cotacaoPronta.cotacao_itens[0].id;
+
+        const lancado = await postOrcamentos(
+            tokenGestor,
+            cotacaoPronta.id,
+            itemPronta,
+            tresOrcamentos()
+        );
+
+        expect(lancado.body.status).toBe('pronta_para_analise');
+
+        const criadaFinalizada = await criarCotacao([
+            {
+                descricao: 'Item listagem finalizada',
+                quantidade: 1,
+                unidade: 'UN'
+            }
+        ]);
+        const { cotacao: finalizada } =
+            await tornarFinalizada(criadaFinalizada);
+
+        expect(finalizada.status).toBe('finalizada');
+
+        const lista = await request(app)
+            .get('/cotacoes')
+            .set('Authorization', `Bearer ${tokenGestor}`);
+
+        expect(lista.statusCode).toBe(200);
+
+        const naListaPronta = lista.body.find(
+            (cotacao) => cotacao.id === cotacaoPronta.id
+        );
+        const naListaFinalizada = lista.body.find(
+            (cotacao) => cotacao.id === finalizada.id
+        );
+
+        expect(naListaPronta).toBeDefined();
+        expect(naListaPronta.status).toBe('pronta_para_analise');
+        expect(naListaFinalizada).toBeDefined();
+        expect(naListaFinalizada.status).toBe('finalizada');
+        expect(naListaPronta.progresso_itens).toBeUndefined();
+        expect(naListaFinalizada.progresso_itens).toBeUndefined();
+    });
+
+    it('PUT e DELETE antigos de proposta recusam cotação finalizada ou cancelada', async () => {
+        const criadaFinalizada = await criarCotacao([
+            {
+                descricao: 'Item delete antigo',
+                quantidade: 1,
+                unidade: 'UN'
+            }
+        ]);
+        const { cotacao: finalizada } =
+            await tornarFinalizada(criadaFinalizada);
+
+        const propostasFinalizada = await request(app)
+            .get('/cotacao-propostas')
+            .query({ cotacao_id: finalizada.id })
+            .set('Authorization', `Bearer ${tokenGestor}`);
+
+        const envelopeFinalizada = (propostasFinalizada.body || []).find(
+            (proposta) => proposta.cotacao_id === finalizada.id
+        );
+
+        expect(envelopeFinalizada).toBeDefined();
+
+        const editarFinalizada = await request(app)
+            .put(`/cotacao-propostas/${envelopeFinalizada.id}`)
+            .set('Authorization', `Bearer ${tokenGestor}`)
+            .send({
+                observacoes: 'tentativa de editar terminal'
+            });
+
+        expect(editarFinalizada.statusCode).toBe(400);
+
+        const apagarFinalizada = await request(app)
+            .delete(`/cotacao-propostas/${envelopeFinalizada.id}`)
+            .set('Authorization', `Bearer ${tokenGestor}`);
+
+        expect(apagarFinalizada.statusCode).toBe(400);
+
+        const cancelada = await criarCotacao([
+            {
+                descricao: 'Item delete cancelado',
+                quantidade: 1,
+                unidade: 'UN'
+            }
+        ]);
+        const itemCancelada = cancelada.cotacao_itens[0].id;
+
+        await postOrcamentos(
+            tokenGestor,
+            cancelada.id,
+            itemCancelada,
+            [
+                {
+                    fornecedor_id: fornecedorA.id,
+                    valor_unitario: 10
+                }
+            ]
+        );
+
+        const del = await request(app)
+            .delete(`/cotacoes/${cancelada.id}`)
+            .set('Authorization', `Bearer ${tokenGestor}`)
+            .send({
+                motivo_cancelamento: 'Cancelada para recusar DELETE antigo'
+            });
+
+        expect(del.statusCode).toBe(200);
+
+        const propostasCancelada = await request(app)
+            .get('/cotacao-propostas')
+            .query({ cotacao_id: cancelada.id })
+            .set('Authorization', `Bearer ${tokenGestor}`);
+
+        const envelopeCancelada = (propostasCancelada.body || []).find(
+            (proposta) => proposta.cotacao_id === cancelada.id
+        );
+
+        const editarCancelada = await request(app)
+            .put(`/cotacao-propostas/${envelopeCancelada.id}`)
+            .set('Authorization', `Bearer ${tokenGestor}`)
+            .send({
+                observacoes: 'tentativa de editar cancelada'
+            });
+
+        expect(editarCancelada.statusCode).toBe(400);
+
+        const apagarCancelada = await request(app)
+            .delete(`/cotacao-propostas/${envelopeCancelada.id}`)
+            .set('Authorization', `Bearer ${tokenGestor}`);
+
+        expect(apagarCancelada.statusCode).toBe(400);
+
+        const detalheFinalizada = await getCotacao(
+            tokenGestor,
+            finalizada.id
+        );
+
+        expect(detalheFinalizada.body.status).toBe('finalizada');
+        expect(
+            itemOrcamentos(
+                detalheFinalizada.body,
+                finalizada.cotacao_itens[0].id
+            ).length
+        ).toBe(3);
+    });
 });

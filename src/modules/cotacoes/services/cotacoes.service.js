@@ -539,19 +539,27 @@ export const alterarStatusProgressoCotacao = async (
     usuarioId
 ) => {
 
-    const statusPermitidos = [
+    const statusDerivados = [
         'aberta',
         'em_andamento',
         'pronta_para_analise',
-        'finalizada',
-        'cancelada'
+        'finalizada'
     ];
 
     // =========================
     // VALIDAR STATUS
     // =========================
 
-    if (!statusPermitidos.includes(status)) {
+    if (statusDerivados.includes(status)) {
+        return {
+            error: {
+                message:
+                    'O status de progresso é derivado automaticamente e não pode ser alterado manualmente'
+            }
+        };
+    }
+
+    if (status !== 'cancelada') {
         return {
             error: {
                 message:
