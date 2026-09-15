@@ -8,9 +8,9 @@ Numa Cotação de um só Item, o lote que traz o terceiro Fornecedor distinto de
 
 **Status:** ready-for-agent
 
-- [ ] Modal do Item permite um ou vários blocos no mesmo envio; cada bloco é Fornecedor + valor unitário daquele Item
-- [ ] Lote válido grava todas as linhas; o detalhe lista todas e o badge acompanha o status derivado
-- [ ] Duplicata `(Item, Fornecedor)` no payload ou contra linhas já gravadas → 400 do lote e nenhuma linha nova
-- [ ] Cotação de um Item cujo lote completa três Fornecedores distintos responde `pronta_para_analise` (não `em_andamento`)
-- [ ] Quarto (e quinto) Orçamento no mesmo Item é aceito depois do mínimo
-- [ ] Validação continua no array inteiro antes de gravar (valor > 0, Fornecedor ativo, Cotação não terminal/`ativo`)
+- [x] Modal do Item permite um ou vários blocos no mesmo envio; cada bloco é Fornecedor + valor unitário daquele Item
+- [x] Lote válido grava todas as linhas; o detalhe lista todas e o badge acompanha o status derivado
+- [x] Duplicata `(Item, Fornecedor)` no payload ou contra linhas já gravadas → 400 do lote e nenhuma linha nova
+- [x] Cotação de um Item cujo lote completa três Fornecedores distintos responde `pronta_para_analise` (não `em_andamento`)
+- [x] Quarto (e quinto) Orçamento no mesmo Item é aceito depois do mínimo
+- [x] Validação continua no array inteiro antes de gravar (valor > 0, Fornecedor ativo, Cotação não terminal/`ativo`)

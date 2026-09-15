@@ -8,6 +8,9 @@ let pacienteId = '';
 let areaId = '';
 let fornecedorA = null;
 let fornecedorB = null;
+let fornecedorC = null;
+let fornecedorD = null;
+let fornecedorE = null;
 
 beforeAll(async () => {
     const gestor = await request(app)
@@ -64,7 +67,33 @@ beforeAll(async () => {
         cnpj: `${stamp}2`
     });
 
-    if (!pacienteId || !areaId || !fornecedorA?.id || !fornecedorB?.id) {
+    fornecedorC = await criarFornecedor({
+        razao_social: `Fornecedor C ${stamp}`,
+        nome_fantasia: 'Hospitalar Sul',
+        cnpj: `${stamp}3`
+    });
+
+    fornecedorD = await criarFornecedor({
+        razao_social: `Fornecedor D ${stamp}`,
+        nome_fantasia: 'Farma Leste',
+        cnpj: `${stamp}4`
+    });
+
+    fornecedorE = await criarFornecedor({
+        razao_social: `Fornecedor E ${stamp}`,
+        nome_fantasia: 'Comercial Oeste',
+        cnpj: `${stamp}5`
+    });
+
+    if (
+        !pacienteId ||
+        !areaId ||
+        !fornecedorA?.id ||
+        !fornecedorB?.id ||
+        !fornecedorC?.id ||
+        !fornecedorD?.id ||
+        !fornecedorE?.id
+    ) {
         throw new Error(
             'Seed da costura: paciente, área e fornecedores ativos são obrigatórios'
         );
@@ -606,5 +635,339 @@ describe('Orçamentos no Item da Cotação', () => {
         expect(String(envelope.data_proposta).slice(0, 10))
             .toBe(new Date().toISOString().slice(0, 10));
         expect(envelope.selecionada).toBe(false);
+    });
+
+    it('lote válido grava todas as linhas e o detalhe lista todas com status derivado', async () => {
+        const cotacao = await criarCotacao([
+            {
+                descricao: 'Item lote',
+                quantidade: 2,
+                unidade: 'UN'
+            }
+        ]);
+
+        const itemId = cotacao.cotacao_itens[0].id;
+
+        const res = await postOrcamentos(
+            tokenGestor,
+            cotacao.id,
+            itemId,
+            [
+                {
+                    fornecedor_id: fornecedorA.id,
+                    valor_unitario: 10
+                },
+                {
+                    fornecedor_id: fornecedorB.id,
+                    valor_unitario: 12.5
+                }
+            ]
+        );
+
+        expect(res.statusCode).toBe(201);
+        expect(res.body.status).toBe('em_andamento');
+
+        const orcamentos = itemOrcamentos(res.body, itemId);
+
+        expect(orcamentos).toHaveLength(2);
+        expect(orcamentos).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    fornecedor_id: fornecedorA.id,
+                    fornecedor_nome: 'Farmacia Central',
+                    valor_unitario: 10,
+                    valor_total: 20,
+                    selecionada: false
+                }),
+                expect.objectContaining({
+                    fornecedor_id: fornecedorB.id,
+                    fornecedor_nome: 'Distribuidora Norte',
+                    valor_unitario: 12.5,
+                    valor_total: 25,
+                    selecionada: false
+                })
+            ])
+        );
+
+        const detalhe = await request(app)
+            .get(`/cotacoes/${cotacao.id}`)
+            .set('Authorization', `Bearer ${tokenGestor}`);
+
+        expect(detalhe.statusCode).toBe(200);
+        expect(detalhe.body.status).toBe('em_andamento');
+        expect(itemOrcamentos(detalhe.body, itemId)).toHaveLength(2);
+    });
+
+    it('duplicata de fornecedor no payload ou contra linhas já gravadas recusa o lote e não persiste nada novo', async () => {
+        const cotacao = await criarCotacao([
+            {
+                descricao: 'Item duplicata',
+                quantidade: 1,
+                unidade: 'UN'
+            }
+        ]);
+
+        const itemId = cotacao.cotacao_itens[0].id;
+
+        const repetidoNoPayload = await postOrcamentos(
+            tokenGestor,
+            cotacao.id,
+            itemId,
+            [
+                {
+                    fornecedor_id: fornecedorA.id,
+                    valor_unitario: 10
+                },
+                {
+                    fornecedor_id: fornecedorA.id,
+                    valor_unitario: 11
+                }
+            ]
+        );
+
+        expect(repetidoNoPayload.statusCode).toBe(400);
+
+        const aposPayload = await request(app)
+            .get(`/cotacoes/${cotacao.id}`)
+            .set('Authorization', `Bearer ${tokenGestor}`);
+
+        expect(aposPayload.body.status).toBe('aberta');
+        expect(itemOrcamentos(aposPayload.body, itemId)).toHaveLength(0);
+
+        const primeiro = await postOrcamentos(
+            tokenGestor,
+            cotacao.id,
+            itemId,
+            [
+                {
+                    fornecedor_id: fornecedorA.id,
+                    valor_unitario: 10
+                }
+            ]
+        );
+
+        expect(primeiro.statusCode).toBe(201);
+
+        const contraExistente = await postOrcamentos(
+            tokenGestor,
+            cotacao.id,
+            itemId,
+            [
+                {
+                    fornecedor_id: fornecedorB.id,
+                    valor_unitario: 8
+                },
+                {
+                    fornecedor_id: fornecedorA.id,
+                    valor_unitario: 9
+                }
+            ]
+        );
+
+        expect(contraExistente.statusCode).toBe(400);
+
+        const detalhe = await request(app)
+            .get(`/cotacoes/${cotacao.id}`)
+            .set('Authorization', `Bearer ${tokenGestor}`);
+
+        expect(detalhe.body.status).toBe('em_andamento');
+        expect(itemOrcamentos(detalhe.body, itemId)).toHaveLength(1);
+        expect(itemOrcamentos(detalhe.body, itemId)[0]).toEqual(
+            expect.objectContaining({
+                fornecedor_id: fornecedorA.id,
+                valor_unitario: 10
+            })
+        );
+    });
+
+    it('cotação de um item cujo lote completa três fornecedores distintos responde pronta_para_analise', async () => {
+        const cotacao = await criarCotacao([
+            {
+                descricao: 'Item único',
+                quantidade: 3,
+                unidade: 'UN'
+            }
+        ]);
+
+        const itemId = cotacao.cotacao_itens[0].id;
+
+        expect(cotacao.status).toBe('aberta');
+
+        const res = await postOrcamentos(
+            tokenGestor,
+            cotacao.id,
+            itemId,
+            [
+                {
+                    fornecedor_id: fornecedorA.id,
+                    valor_unitario: 5
+                },
+                {
+                    fornecedor_id: fornecedorB.id,
+                    valor_unitario: 6
+                },
+                {
+                    fornecedor_id: fornecedorC.id,
+                    valor_unitario: 7
+                }
+            ]
+        );
+
+        expect(res.statusCode).toBe(201);
+        expect(res.body.status).toBe('pronta_para_analise');
+        expect(itemOrcamentos(res.body, itemId)).toHaveLength(3);
+        expect(
+            itemOrcamentos(res.body, itemId).every(
+                (orcamento) => orcamento.selecionada === false
+            )
+        ).toBe(true);
+
+        const detalhe = await request(app)
+            .get(`/cotacoes/${cotacao.id}`)
+            .set('Authorization', `Bearer ${tokenGestor}`);
+
+        expect(detalhe.body.status).toBe('pronta_para_analise');
+        expect(itemOrcamentos(detalhe.body, itemId)).toHaveLength(3);
+    });
+
+    it('quarto e quinto orçamento no mesmo item são aceitos depois do mínimo', async () => {
+        const cotacao = await criarCotacao([
+            {
+                descricao: 'Item extra',
+                quantidade: 1,
+                unidade: 'UN'
+            }
+        ]);
+
+        const itemId = cotacao.cotacao_itens[0].id;
+
+        const minimo = await postOrcamentos(
+            tokenGestor,
+            cotacao.id,
+            itemId,
+            [
+                {
+                    fornecedor_id: fornecedorA.id,
+                    valor_unitario: 4
+                },
+                {
+                    fornecedor_id: fornecedorB.id,
+                    valor_unitario: 5
+                },
+                {
+                    fornecedor_id: fornecedorC.id,
+                    valor_unitario: 6
+                }
+            ]
+        );
+
+        expect(minimo.statusCode).toBe(201);
+        expect(minimo.body.status).toBe('pronta_para_analise');
+
+        const quarto = await postOrcamentos(
+            tokenGestor,
+            cotacao.id,
+            itemId,
+            [
+                {
+                    fornecedor_id: fornecedorD.id,
+                    valor_unitario: 7
+                }
+            ]
+        );
+
+        expect(quarto.statusCode).toBe(201);
+        expect(quarto.body.status).toBe('pronta_para_analise');
+        expect(itemOrcamentos(quarto.body, itemId)).toHaveLength(4);
+        expect(itemOrcamentos(quarto.body, itemId)).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    fornecedor_id: fornecedorD.id,
+                    fornecedor_nome: 'Farma Leste',
+                    valor_unitario: 7,
+                    valor_total: 7,
+                    selecionada: false
+                })
+            ])
+        );
+
+        const quinto = await postOrcamentos(
+            tokenGestor,
+            cotacao.id,
+            itemId,
+            [
+                {
+                    fornecedor_id: fornecedorE.id,
+                    valor_unitario: 8
+                }
+            ]
+        );
+
+        expect(quinto.statusCode).toBe(201);
+        expect(quinto.body.status).toBe('pronta_para_analise');
+        expect(itemOrcamentos(quinto.body, itemId)).toHaveLength(5);
+    });
+
+    it('lote com valor inválido ou fornecedor inativo não persiste nenhuma linha', async () => {
+        const cotacao = await criarCotacao([
+            {
+                descricao: 'Item validação lote',
+                quantidade: 2,
+                unidade: 'UN'
+            }
+        ]);
+
+        const itemId = cotacao.cotacao_itens[0].id;
+
+        const valorZero = await postOrcamentos(
+            tokenGestor,
+            cotacao.id,
+            itemId,
+            [
+                {
+                    fornecedor_id: fornecedorA.id,
+                    valor_unitario: 10
+                },
+                {
+                    fornecedor_id: fornecedorB.id,
+                    valor_unitario: 0
+                }
+            ]
+        );
+
+        expect(valorZero.statusCode).toBe(400);
+
+        const inativo = await criarFornecedor({
+            razao_social: `Fornecedor lote inativo ${Date.now()}`,
+            nome_fantasia: 'Lote Inativo',
+            cnpj: `${Date.now()}8`
+        });
+
+        await inativarFornecedor(inativo.id);
+
+        const fornecedorInativo = await postOrcamentos(
+            tokenGestor,
+            cotacao.id,
+            itemId,
+            [
+                {
+                    fornecedor_id: fornecedorA.id,
+                    valor_unitario: 10
+                },
+                {
+                    fornecedor_id: inativo.id,
+                    valor_unitario: 11
+                }
+            ]
+        );
+
+        expect(fornecedorInativo.statusCode).toBe(400);
+
+        const detalhe = await request(app)
+            .get(`/cotacoes/${cotacao.id}`)
+            .set('Authorization', `Bearer ${tokenGestor}`);
+
+        expect(detalhe.body.status).toBe('aberta');
+        expect(itemOrcamentos(detalhe.body, itemId)).toHaveLength(0);
     });
 });
