@@ -120,7 +120,8 @@ async function carregarFatosStatus(cotacaoId, statusAtual) {
             id,
             cotacao_proposta_itens (
                 id,
-                item_id
+                item_id,
+                selecionada
             )
         `)
         .eq('cotacao_id', cotacaoId);
@@ -144,7 +145,8 @@ async function carregarFatosStatus(cotacaoId, statusAtual) {
 
             if (lista) {
                 lista.push({
-                    id: linha.id
+                    id: linha.id,
+                    selecionada: linha.selecionada === true
                 });
             }
         }
@@ -153,10 +155,17 @@ async function carregarFatosStatus(cotacaoId, statusAtual) {
     return {
         data: {
             statusAtual,
-            itens: (itens || []).map((item) => ({
-                vencedorId: null,
-                orcamentos: orcamentosPorItem.get(item.id) || []
-            }))
+            itens: (itens || []).map((item) => {
+                const orcamentos = orcamentosPorItem.get(item.id) || [];
+                const vencedor = orcamentos.find(
+                    (orcamento) => orcamento.selecionada
+                );
+
+                return {
+                    vencedorId: vencedor?.id || null,
+                    orcamentos
+                };
+            })
         },
         error: null
     };

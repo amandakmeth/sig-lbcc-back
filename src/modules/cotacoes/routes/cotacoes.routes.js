@@ -14,7 +14,8 @@ import {
 import {
     createOrcamentosItem,
     updateOrcamentoItem,
-    deleteOrcamentoItem
+    deleteOrcamentoItem,
+    escolherVencedorOrcamentoItem
 } from '../controllers/cotacaoOrcamentos.controller.js';
 
 import { authMiddleware } from '../../auth/middlewares/auth.middleware.js';
@@ -221,6 +222,52 @@ router.put(
 router.delete(
     '/:id/itens/:itemId/orcamentos/:orcamentoId',
     deleteOrcamentoItem
+);
+
+/**
+ * @swagger
+ * /cotacoes/{id}/itens/{itemId}/vencedor:
+ *   patch:
+ *     summary: Define o orçamento vencedor de um item
+ *     tags: [Cotações]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: itemId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - orcamento_id
+ *             properties:
+ *               orcamento_id:
+ *                 type: string
+ *                 format: uuid
+ *     responses:
+ *       200:
+ *         description: Cotação com o vencedor do item
+ *       400:
+ *         description: Erro de validação
+ *       401:
+ *         description: Sem autenticação
+ *       403:
+ *         description: Sem permissão
+ */
+router.patch(
+    '/:id/itens/:itemId/vencedor',
+    escolherVencedorOrcamentoItem
 );
 
 

@@ -144,7 +144,8 @@ async function anexarOrcamentosAosItens(cotacao) {
                 id,
                 item_id,
                 valor_unitario,
-                valor_total
+                valor_total,
+                selecionada
             )
         `)
         .eq('cotacao_id', cotacao.id);
@@ -178,7 +179,7 @@ async function anexarOrcamentosAosItens(cotacao) {
                 fornecedor_nome: fornecedorNome,
                 valor_unitario: Number(linha.valor_unitario),
                 valor_total: Number(linha.valor_total),
-                selecionada: false
+                selecionada: linha.selecionada === true
             });
         }
     }

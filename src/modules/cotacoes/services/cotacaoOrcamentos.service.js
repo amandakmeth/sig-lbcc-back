@@ -264,6 +264,7 @@ export async function inserirOrcamentosNoItem({
             item_id: itemId,
             valor_unitario: valorUnitario,
             valor_total: valorTotal,
+            selecionada: false,
             observacoes: bloco.observacoes || null
         });
     }
@@ -492,6 +493,32 @@ export async function removerOrcamento({
     }
 
     const {
+        data: linhasDoItem,
+        error: linhasDoItemError
+    } = await supabase
+        .from('cotacao_proposta_itens')
+        .select('id, selecionada')
+        .eq('item_id', itemId);
+
+    if (linhasDoItemError) {
+        return {
+            data: null,
+            error: linhasDoItemError
+        };
+    }
+
+    if ((linhasDoItem || []).length < 3) {
+        const erroLimpar = await zerarVencedorDoItem(itemId);
+
+        if (erroLimpar) {
+            return {
+                data: null,
+                error: erroLimpar
+            };
+        }
+    }
+
+    const {
         error: statusError
     } = await aplicarStatusCotacaoPorFatos(cotacaoId);
 
@@ -503,6 +530,110 @@ export async function removerOrcamento({
     }
 
     return buscarCotacaoPorId(cotacaoId);
+}
+
+export async function escolherVencedorItem({
+    cotacaoId,
+    itemId,
+    orcamentoId
+}) {
+    if (!orcamentoId) {
+        return {
+            data: null,
+            error: {
+                message: 'Orçamento vencedor é obrigatório'
+            }
+        };
+    }
+
+    const {
+        data: contexto,
+        error: contextoError
+    } = await carregarLinhaOrcamento({
+        cotacaoId,
+        itemId,
+        orcamentoId
+    });
+
+    if (contextoError) {
+        return {
+            data: null,
+            error: contextoError
+        };
+    }
+
+    const {
+        data: linhasDoItem,
+        error: linhasError
+    } = await supabase
+        .from('cotacao_proposta_itens')
+        .select('id')
+        .eq('item_id', itemId);
+
+    if (linhasError) {
+        return {
+            data: null,
+            error: linhasError
+        };
+    }
+
+    if (!linhasDoItem || linhasDoItem.length < 3) {
+        return {
+            data: null,
+            error: {
+                message:
+                    'Só é possível definir vencedor com pelo menos três orçamentos no item'
+            }
+        };
+    }
+
+    const erroLimpar = await zerarVencedorDoItem(itemId);
+
+    if (erroLimpar) {
+        return {
+            data: null,
+            error: erroLimpar
+        };
+    }
+
+    const { error: erroVencedor } = await supabase
+        .from('cotacao_proposta_itens')
+        .update({
+            selecionada: true
+        })
+        .eq('id', orcamentoId);
+
+    if (erroVencedor) {
+        return {
+            data: null,
+            error: erroVencedor
+        };
+    }
+
+    const {
+        error: statusError
+    } = await aplicarStatusCotacaoPorFatos(cotacaoId);
+
+    if (statusError) {
+        return {
+            data: null,
+            error: statusError
+        };
+    }
+
+    return buscarCotacaoPorId(cotacaoId);
+}
+
+async function zerarVencedorDoItem(itemId) {
+    const { error } = await supabase
+        .from('cotacao_proposta_itens')
+        .update({
+            selecionada: false
+        })
+        .eq('item_id', itemId)
+        .eq('selecionada', true);
+
+    return error;
 }
 
 async function carregarLinhaOrcamento({

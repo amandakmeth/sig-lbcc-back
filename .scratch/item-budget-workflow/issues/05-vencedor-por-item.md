@@ -10,11 +10,11 @@ Vencedor = `selecionada` na **linha** (no máximo uma verdadeira por Item). Migr
 
 **Status:** ready-for-agent
 
-- [ ] “Definir vencedor” na lista do Item fica desabilitado com 0, 1 ou 2 Orçamentos e habilitado com ≥ 3; não aparece no modal de criar
-- [ ] Gestor escolhe um Orçamento daquele Item como vencedor; `selecionada` fica verdadeira só nessa linha; o detalhe destaca a linha
-- [ ] Escolher outro vencedor no mesmo Item desmarca o anterior; Itens distintos aceitam Fornecedores vencedores distintos
-- [ ] Cotação de um Item (ou todos os Itens) com vencedor responde `finalizada`; o badge acompanha
-- [ ] Cotação de dois Itens: três Orçamentos no A e um no B → `em_andamento`, vencedor só no A; três em ambos e vencedor só no A → `pronta_para_analise`
-- [ ] Apagar até o Item ter menos de três zera `selecionada` daquele Item e a função de status corre de novo
-- [ ] Operador 403; Cotação terminal recusa troca de vencedor; linha que não pertence ao Item é recusada
-- [ ] Envelope `selecionada` permanece fora da escolha; não se usa vencedor global da Cotação
+- [x] “Definir vencedor” na lista do Item fica desabilitado com 0, 1 ou 2 Orçamentos e habilitado com ≥ 3; não aparece no modal de criar
+- [x] Gestor escolhe um Orçamento daquele Item como vencedor; `selecionada` fica verdadeira só nessa linha; o detalhe destaca a linha
+- [x] Escolher outro vencedor no mesmo Item desmarca o anterior; Itens distintos aceitam Fornecedores vencedores distintos
+- [x] Cotação de um Item (ou todos os Itens) com vencedor responde `finalizada`; o badge acompanha
+- [x] Cotação de dois Itens: três Orçamentos no A e um no B → `em_andamento`, vencedor só no A; três em ambos e vencedor só no A → `pronta_para_analise`
+- [x] Apagar até o Item ter menos de três zera `selecionada` daquele Item e a função de status corre de novo
+- [x] Operador 403; Cotação terminal recusa troca de vencedor; linha que não pertence ao Item é recusada
+- [x] Envelope `selecionada` permanece fora da escolha; não se usa vencedor global da Cotação

@@ -180,6 +180,19 @@ function deleteOrcamento(token, cotacaoId, itemId, orcamentoId) {
     return req;
 }
 
+function escolherVencedor(token, cotacaoId, itemId, orcamentoId) {
+    const req = request(app)
+        .patch(`/cotacoes/${cotacaoId}/itens/${itemId}/vencedor`);
+
+    if (token) {
+        req.set('Authorization', `Bearer ${token}`);
+    }
+
+    return req.send({
+        orcamento_id: orcamentoId
+    });
+}
+
 async function inativarFornecedor(id) {
     const res = await request(app)
         .patch(`/fornecedores/${id}/status`)
@@ -1523,5 +1536,700 @@ describe('Orçamentos no Item da Cotação', () => {
         );
 
         expect(apagarInativa.statusCode).toBe(400);
+    });
+
+    it('gestor escolhe um orçamento como vencedor no item com três lançamentos e a cotação de um item fica finalizada', async () => {
+        const cotacao = await criarCotacao([
+            {
+                descricao: 'Item vencedor único',
+                quantidade: 2,
+                unidade: 'UN'
+            }
+        ]);
+
+        const itemId = cotacao.cotacao_itens[0].id;
+
+        const lancado = await postOrcamentos(
+            tokenGestor,
+            cotacao.id,
+            itemId,
+            [
+                {
+                    fornecedor_id: fornecedorA.id,
+                    valor_unitario: 10
+                },
+                {
+                    fornecedor_id: fornecedorB.id,
+                    valor_unitario: 11
+                },
+                {
+                    fornecedor_id: fornecedorC.id,
+                    valor_unitario: 12
+                }
+            ]
+        );
+
+        expect(lancado.statusCode).toBe(201);
+        expect(lancado.body.status).toBe('pronta_para_analise');
+
+        const vencedor = itemOrcamentos(lancado.body, itemId).find(
+            (orcamento) => orcamento.fornecedor_id === fornecedorA.id
+        );
+
+        const res = await escolherVencedor(
+            tokenGestor,
+            cotacao.id,
+            itemId,
+            vencedor.id
+        );
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.status).toBe('finalizada');
+
+        const orcamentos = itemOrcamentos(res.body, itemId);
+
+        expect(orcamentos).toHaveLength(3);
+        expect(
+            orcamentos.find((orcamento) => orcamento.id === vencedor.id)
+                .selecionada
+        ).toBe(true);
+        expect(
+            orcamentos.filter((orcamento) => orcamento.selecionada === true)
+        ).toHaveLength(1);
+
+        const detalhe = await request(app)
+            .get(`/cotacoes/${cotacao.id}`)
+            .set('Authorization', `Bearer ${tokenGestor}`);
+
+        expect(detalhe.statusCode).toBe(200);
+        expect(detalhe.body.status).toBe('finalizada');
+        expect(
+            itemOrcamentos(detalhe.body, itemId).find(
+                (orcamento) => orcamento.id === vencedor.id
+            ).selecionada
+        ).toBe(true);
+
+        const propostas = await request(app)
+            .get('/cotacao-propostas')
+            .query({ cotacao_id: cotacao.id })
+            .set('Authorization', `Bearer ${tokenGestor}`);
+
+        const envelopes = (propostas.body || []).filter(
+            (proposta) => proposta.cotacao_id === cotacao.id
+        );
+
+        expect(envelopes.length).toBeGreaterThan(0);
+        expect(
+            envelopes.every((envelope) => envelope.selecionada === false)
+        ).toBe(true);
+    });
+
+    it('definir vencedor fica recusado com menos de três orçamentos no item', async () => {
+        const cotacao = await criarCotacao([
+            {
+                descricao: 'Item ainda incompleto',
+                quantidade: 1,
+                unidade: 'UN'
+            }
+        ]);
+
+        const itemId = cotacao.cotacao_itens[0].id;
+
+        const dois = await postOrcamentos(
+            tokenGestor,
+            cotacao.id,
+            itemId,
+            [
+                {
+                    fornecedor_id: fornecedorA.id,
+                    valor_unitario: 10
+                },
+                {
+                    fornecedor_id: fornecedorB.id,
+                    valor_unitario: 11
+                }
+            ]
+        );
+
+        expect(dois.statusCode).toBe(201);
+
+        const orcamentoId = itemOrcamentos(dois.body, itemId)[0].id;
+
+        const res = await escolherVencedor(
+            tokenGestor,
+            cotacao.id,
+            itemId,
+            orcamentoId
+        );
+
+        expect(res.statusCode).toBe(400);
+        expect(itemOrcamentos(dois.body, itemId).every(
+            (orcamento) => orcamento.selecionada === false
+        )).toBe(true);
+
+        const detalhe = await request(app)
+            .get(`/cotacoes/${cotacao.id}`)
+            .set('Authorization', `Bearer ${tokenGestor}`);
+
+        expect(detalhe.body.status).toBe('em_andamento');
+        expect(
+            itemOrcamentos(detalhe.body, itemId).every(
+                (orcamento) => orcamento.selecionada === false
+            )
+        ).toBe(true);
+    });
+
+    it('escolher outro vencedor no mesmo item desmarca o anterior; itens distintos aceitam vencedores distintos', async () => {
+        const cotacao = await criarCotacao([
+            {
+                descricao: 'Item A',
+                quantidade: 1,
+                unidade: 'UN'
+            },
+            {
+                descricao: 'Item B',
+                quantidade: 1,
+                unidade: 'UN'
+            }
+        ]);
+
+        const itemA = cotacao.cotacao_itens[0].id;
+        const itemB = cotacao.cotacao_itens[1].id;
+
+        const tres = [
+            {
+                fornecedor_id: fornecedorA.id,
+                valor_unitario: 10
+            },
+            {
+                fornecedor_id: fornecedorB.id,
+                valor_unitario: 11
+            },
+            {
+                fornecedor_id: fornecedorC.id,
+                valor_unitario: 12
+            }
+        ];
+
+        const lancadoA = await postOrcamentos(
+            tokenGestor,
+            cotacao.id,
+            itemA,
+            tres
+        );
+        const lancadoB = await postOrcamentos(
+            tokenGestor,
+            cotacao.id,
+            itemB,
+            tres
+        );
+
+        expect(lancadoA.statusCode).toBe(201);
+        expect(lancadoB.statusCode).toBe(201);
+
+        const primeiroA = itemOrcamentos(lancadoA.body, itemA).find(
+            (orcamento) => orcamento.fornecedor_id === fornecedorA.id
+        );
+        const segundoA = itemOrcamentos(lancadoA.body, itemA).find(
+            (orcamento) => orcamento.fornecedor_id === fornecedorB.id
+        );
+        const vencedorB = itemOrcamentos(lancadoB.body, itemB).find(
+            (orcamento) => orcamento.fornecedor_id === fornecedorC.id
+        );
+
+        const escolheA = await escolherVencedor(
+            tokenGestor,
+            cotacao.id,
+            itemA,
+            primeiroA.id
+        );
+
+        expect(escolheA.statusCode).toBe(200);
+        expect(escolheA.body.status).toBe('pronta_para_analise');
+        expect(
+            itemOrcamentos(escolheA.body, itemA).find(
+                (orcamento) => orcamento.id === primeiroA.id
+            ).selecionada
+        ).toBe(true);
+
+        const trocaA = await escolherVencedor(
+            tokenGestor,
+            cotacao.id,
+            itemA,
+            segundoA.id
+        );
+
+        expect(trocaA.statusCode).toBe(200);
+        expect(
+            itemOrcamentos(trocaA.body, itemA).find(
+                (orcamento) => orcamento.id === segundoA.id
+            ).selecionada
+        ).toBe(true);
+        expect(
+            itemOrcamentos(trocaA.body, itemA).find(
+                (orcamento) => orcamento.id === primeiroA.id
+            ).selecionada
+        ).toBe(false);
+
+        const escolheB = await escolherVencedor(
+            tokenGestor,
+            cotacao.id,
+            itemB,
+            vencedorB.id
+        );
+
+        expect(escolheB.statusCode).toBe(200);
+        expect(escolheB.body.status).toBe('finalizada');
+        expect(
+            itemOrcamentos(escolheB.body, itemA).find(
+                (orcamento) => orcamento.id === segundoA.id
+            ).selecionada
+        ).toBe(true);
+        expect(
+            itemOrcamentos(escolheB.body, itemB).find(
+                (orcamento) => orcamento.id === vencedorB.id
+            ).selecionada
+        ).toBe(true);
+        expect(
+            itemOrcamentos(escolheB.body, itemB).filter(
+                (orcamento) => orcamento.selecionada === true
+            )
+        ).toHaveLength(1);
+    });
+
+    it('dois itens com três orçamentos no A e um no B ficam em_andamento; vencedor só no A', async () => {
+        const cotacao = await criarCotacao([
+            {
+                descricao: 'Item A',
+                quantidade: 1,
+                unidade: 'UN'
+            },
+            {
+                descricao: 'Item B',
+                quantidade: 1,
+                unidade: 'UN'
+            }
+        ]);
+
+        const itemA = cotacao.cotacao_itens[0].id;
+        const itemB = cotacao.cotacao_itens[1].id;
+
+        const lancadoA = await postOrcamentos(
+            tokenGestor,
+            cotacao.id,
+            itemA,
+            [
+                {
+                    fornecedor_id: fornecedorA.id,
+                    valor_unitario: 10
+                },
+                {
+                    fornecedor_id: fornecedorB.id,
+                    valor_unitario: 11
+                },
+                {
+                    fornecedor_id: fornecedorC.id,
+                    valor_unitario: 12
+                }
+            ]
+        );
+        const lancadoB = await postOrcamentos(
+            tokenGestor,
+            cotacao.id,
+            itemB,
+            [
+                {
+                    fornecedor_id: fornecedorA.id,
+                    valor_unitario: 8
+                }
+            ]
+        );
+
+        expect(lancadoA.statusCode).toBe(201);
+        expect(lancadoB.statusCode).toBe(201);
+
+        const vencedorA = itemOrcamentos(lancadoA.body, itemA)[0];
+        const orcamentoB = itemOrcamentos(lancadoB.body, itemB)[0];
+
+        const escolheA = await escolherVencedor(
+            tokenGestor,
+            cotacao.id,
+            itemA,
+            vencedorA.id
+        );
+
+        expect(escolheA.statusCode).toBe(200);
+        expect(escolheA.body.status).toBe('em_andamento');
+        expect(
+            itemOrcamentos(escolheA.body, itemA).find(
+                (orcamento) => orcamento.id === vencedorA.id
+            ).selecionada
+        ).toBe(true);
+
+        const escolheB = await escolherVencedor(
+            tokenGestor,
+            cotacao.id,
+            itemB,
+            orcamentoB.id
+        );
+
+        expect(escolheB.statusCode).toBe(400);
+        expect(
+            itemOrcamentos(escolheA.body, itemB).every(
+                (orcamento) => orcamento.selecionada === false
+            )
+        ).toBe(true);
+    });
+
+    it('dois itens com três orçamentos cada e vencedor só no A ficam pronta_para_analise', async () => {
+        const cotacao = await criarCotacao([
+            {
+                descricao: 'Item A',
+                quantidade: 1,
+                unidade: 'UN'
+            },
+            {
+                descricao: 'Item B',
+                quantidade: 1,
+                unidade: 'UN'
+            }
+        ]);
+
+        const itemA = cotacao.cotacao_itens[0].id;
+        const itemB = cotacao.cotacao_itens[1].id;
+
+        const tres = [
+            {
+                fornecedor_id: fornecedorA.id,
+                valor_unitario: 10
+            },
+            {
+                fornecedor_id: fornecedorB.id,
+                valor_unitario: 11
+            },
+            {
+                fornecedor_id: fornecedorC.id,
+                valor_unitario: 12
+            }
+        ];
+
+        await postOrcamentos(tokenGestor, cotacao.id, itemA, tres);
+        const lancadoB = await postOrcamentos(
+            tokenGestor,
+            cotacao.id,
+            itemB,
+            tres
+        );
+
+        expect(lancadoB.statusCode).toBe(201);
+        expect(lancadoB.body.status).toBe('pronta_para_analise');
+
+        const vencedorA = itemOrcamentos(lancadoB.body, itemA).find(
+            (orcamento) => orcamento.fornecedor_id === fornecedorA.id
+        );
+
+        const res = await escolherVencedor(
+            tokenGestor,
+            cotacao.id,
+            itemA,
+            vencedorA.id
+        );
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.status).toBe('pronta_para_analise');
+        expect(
+            itemOrcamentos(res.body, itemA).filter(
+                (orcamento) => orcamento.selecionada === true
+            )
+        ).toHaveLength(1);
+        expect(
+            itemOrcamentos(res.body, itemB).every(
+                (orcamento) => orcamento.selecionada === false
+            )
+        ).toBe(true);
+    });
+
+    it('apagar até o item ter menos de três zera o vencedor daquele item e recalcula o status', async () => {
+        const cotacao = await criarCotacao([
+            {
+                descricao: 'Item A',
+                quantidade: 1,
+                unidade: 'UN'
+            },
+            {
+                descricao: 'Item B',
+                quantidade: 1,
+                unidade: 'UN'
+            }
+        ]);
+
+        const itemA = cotacao.cotacao_itens[0].id;
+        const itemB = cotacao.cotacao_itens[1].id;
+
+        const tres = [
+            {
+                fornecedor_id: fornecedorA.id,
+                valor_unitario: 10
+            },
+            {
+                fornecedor_id: fornecedorB.id,
+                valor_unitario: 11
+            },
+            {
+                fornecedor_id: fornecedorC.id,
+                valor_unitario: 12
+            }
+        ];
+
+        await postOrcamentos(tokenGestor, cotacao.id, itemA, tres);
+        const lancadoB = await postOrcamentos(
+            tokenGestor,
+            cotacao.id,
+            itemB,
+            tres
+        );
+
+        const vencedorA = itemOrcamentos(lancadoB.body, itemA).find(
+            (orcamento) => orcamento.fornecedor_id === fornecedorA.id
+        );
+        const outroA = itemOrcamentos(lancadoB.body, itemA).find(
+            (orcamento) => orcamento.fornecedor_id === fornecedorB.id
+        );
+
+        const escolheA = await escolherVencedor(
+            tokenGestor,
+            cotacao.id,
+            itemA,
+            vencedorA.id
+        );
+
+        expect(escolheA.statusCode).toBe(200);
+        expect(escolheA.body.status).toBe('pronta_para_analise');
+
+        const res = await deleteOrcamento(
+            tokenGestor,
+            cotacao.id,
+            itemA,
+            outroA.id
+        );
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body.status).toBe('em_andamento');
+        expect(itemOrcamentos(res.body, itemA)).toHaveLength(2);
+        expect(
+            itemOrcamentos(res.body, itemA).every(
+                (orcamento) => orcamento.selecionada === false
+            )
+        ).toBe(true);
+        expect(
+            itemOrcamentos(res.body, itemB).every(
+                (orcamento) => orcamento.selecionada === false
+            )
+        ).toBe(true);
+    });
+
+    it('operador leva 403 ao definir vencedor; cotação terminal e linha de outro item são recusadas', async () => {
+        const cotacao = await criarCotacao([
+            {
+                descricao: 'Item A',
+                quantidade: 1,
+                unidade: 'UN'
+            },
+            {
+                descricao: 'Item B',
+                quantidade: 1,
+                unidade: 'UN'
+            }
+        ]);
+
+        const itemA = cotacao.cotacao_itens[0].id;
+        const itemB = cotacao.cotacao_itens[1].id;
+
+        const tres = [
+            {
+                fornecedor_id: fornecedorA.id,
+                valor_unitario: 10
+            },
+            {
+                fornecedor_id: fornecedorB.id,
+                valor_unitario: 11
+            },
+            {
+                fornecedor_id: fornecedorC.id,
+                valor_unitario: 12
+            }
+        ];
+
+        await postOrcamentos(tokenGestor, cotacao.id, itemA, tres);
+        const lancadoB = await postOrcamentos(
+            tokenGestor,
+            cotacao.id,
+            itemB,
+            tres
+        );
+
+        const orcamentoA = itemOrcamentos(lancadoB.body, itemA)[0];
+        const orcamentoB = itemOrcamentos(lancadoB.body, itemB)[0];
+
+        const operador = await escolherVencedor(
+            tokenOperador,
+            cotacao.id,
+            itemA,
+            orcamentoA.id
+        );
+
+        expect(operador.statusCode).toBe(403);
+
+        const linhaErrada = await escolherVencedor(
+            tokenGestor,
+            cotacao.id,
+            itemA,
+            orcamentoB.id
+        );
+
+        expect(linhaErrada.statusCode).toBe(400);
+
+        const cancelada = await criarCotacao([
+            {
+                descricao: 'Item cancelado',
+                quantidade: 1,
+                unidade: 'UN'
+            }
+        ]);
+        const itemCancelada = cancelada.cotacao_itens[0].id;
+
+        const lancadoCancelada = await postOrcamentos(
+            tokenGestor,
+            cancelada.id,
+            itemCancelada,
+            tres
+        );
+        const orcamentoCancelada = itemOrcamentos(
+            lancadoCancelada.body,
+            itemCancelada
+        )[0];
+
+        const del = await request(app)
+            .delete(`/cotacoes/${cancelada.id}`)
+            .set('Authorization', `Bearer ${tokenGestor}`)
+            .send({
+                motivo_cancelamento: 'Cancelada para recusar vencedor'
+            });
+
+        expect(del.statusCode).toBe(200);
+
+        const vencedorCancelada = await escolherVencedor(
+            tokenGestor,
+            cancelada.id,
+            itemCancelada,
+            orcamentoCancelada.id
+        );
+
+        expect(vencedorCancelada.statusCode).toBe(400);
+
+        const finalizada = await criarCotacao([
+            {
+                descricao: 'Item finalizado',
+                quantidade: 1,
+                unidade: 'UN'
+            }
+        ]);
+        const itemFinalizada = finalizada.cotacao_itens[0].id;
+        const lancadoFinalizada = await postOrcamentos(
+            tokenGestor,
+            finalizada.id,
+            itemFinalizada,
+            tres
+        );
+        const orcamentoFinalizada = itemOrcamentos(
+            lancadoFinalizada.body,
+            itemFinalizada
+        )[0];
+
+        const patchFinalizada = await request(app)
+            .patch(`/cotacoes/${finalizada.id}/status-progresso`)
+            .set('Authorization', `Bearer ${tokenGestor}`)
+            .send({
+                status: 'finalizada'
+            });
+
+        expect(patchFinalizada.statusCode).toBe(200);
+
+        const vencedorFinalizada = await escolherVencedor(
+            tokenGestor,
+            finalizada.id,
+            itemFinalizada,
+            orcamentoFinalizada.id
+        );
+
+        expect(vencedorFinalizada.statusCode).toBe(400);
+        expect(
+            itemOrcamentos(lancadoB.body, itemA).every(
+                (orcamento) => orcamento.selecionada === false
+            )
+        ).toBe(true);
+    });
+
+    it('cotação finalizada pela escolha do vencedor recusa troca', async () => {
+        const cotacao = await criarCotacao([
+            {
+                descricao: 'Item único finalizado',
+                quantidade: 1,
+                unidade: 'UN'
+            }
+        ]);
+
+        const itemId = cotacao.cotacao_itens[0].id;
+
+        const lancado = await postOrcamentos(
+            tokenGestor,
+            cotacao.id,
+            itemId,
+            [
+                {
+                    fornecedor_id: fornecedorA.id,
+                    valor_unitario: 10
+                },
+                {
+                    fornecedor_id: fornecedorB.id,
+                    valor_unitario: 11
+                },
+                {
+                    fornecedor_id: fornecedorC.id,
+                    valor_unitario: 12
+                }
+            ]
+        );
+
+        const primeiro = itemOrcamentos(lancado.body, itemId).find(
+            (orcamento) => orcamento.fornecedor_id === fornecedorA.id
+        );
+        const segundo = itemOrcamentos(lancado.body, itemId).find(
+            (orcamento) => orcamento.fornecedor_id === fornecedorB.id
+        );
+
+        const escolhe = await escolherVencedor(
+            tokenGestor,
+            cotacao.id,
+            itemId,
+            primeiro.id
+        );
+
+        expect(escolhe.statusCode).toBe(200);
+        expect(escolhe.body.status).toBe('finalizada');
+
+        const troca = await escolherVencedor(
+            tokenGestor,
+            cotacao.id,
+            itemId,
+            segundo.id
+        );
+
+        expect(troca.statusCode).toBe(400);
+        expect(
+            itemOrcamentos(escolhe.body, itemId).find(
+                (orcamento) => orcamento.id === primeiro.id
+            ).selecionada
+        ).toBe(true);
     });
 });
