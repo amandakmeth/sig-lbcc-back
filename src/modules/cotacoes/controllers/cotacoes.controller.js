@@ -386,14 +386,9 @@ export const verificarRelacionamentosCotacao = async (
 // =========================
 // ALTERAR STATUS DE PROGRESSO
 // =========================
-// Permite alterar o status do processo da cotação.
-//
-// Status possíveis:
-// - aberta
-// - em_andamento
-// - pronta_para_analise
-// - finalizada
-// - cancelada
+// O único status posto à mão é cancelada.
+// aberta, em_andamento, pronta_para_analise
+// e finalizada são derivados pela máquina.
 //
 // Para cancelar:
 // - motivo_cancelamento é obrigatório.

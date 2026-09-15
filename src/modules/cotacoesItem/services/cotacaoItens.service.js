@@ -1,4 +1,5 @@
 import supabase from '../../../config/supabase.js';
+import { aplicarStatusCotacaoPorFatos } from '../../cotacoes/services/cotacaoStatus.js';
 
 // =========================
 // LISTAR ITENS DA COTAÇÃO
@@ -195,11 +196,28 @@ export const inserirItemCotacao = async (dados) => {
     // INSERIR
     // =========================
 
-    return await supabase
+    const inserido = await supabase
         .from('cotacao_itens')
         .insert([dadosItem])
         .select()
         .single();
+
+    if (inserido.error) {
+        return inserido;
+    }
+
+    const {
+        error: statusError
+    } = await aplicarStatusCotacaoPorFatos(dados.cotacao_id);
+
+    if (statusError) {
+        return {
+            data: null,
+            error: statusError
+        };
+    }
+
+    return inserido;
 };
 
 // =========================
@@ -360,12 +378,43 @@ export const atualizarItemCotacao = async (
     // ATUALIZAR
     // =========================
 
-    return await supabase
+    const atualizado = await supabase
         .from('cotacao_itens')
         .update(dadosAtualizacao)
         .eq('id', id)
         .select()
         .single();
+
+    if (atualizado.error) {
+        return atualizado;
+    }
+
+    if (dadosAtualizacao.quantidade !== undefined) {
+        const erroRecalc = await recalcularTotaisDoItem(
+            id,
+            dadosAtualizacao.quantidade
+        );
+
+        if (erroRecalc) {
+            return {
+                data: null,
+                error: erroRecalc
+            };
+        }
+    }
+
+    const {
+        error: statusError
+    } = await aplicarStatusCotacaoPorFatos(item.cotacao_id);
+
+    if (statusError) {
+        return {
+            data: null,
+            error: statusError
+        };
+    }
+
+    return atualizado;
 };
 
 // =========================
@@ -412,12 +461,195 @@ export const deletarItemCotacao = async (id) => {
         };
     }
 
+    const {
+        data: itens,
+        error: itensError
+    } = await supabase
+        .from('cotacao_itens')
+        .select('id')
+        .eq('cotacao_id', item.cotacao_id);
+
+    if (itensError) {
+        return {
+            data: null,
+            error: itensError
+        };
+    }
+
+    if ((itens || []).length <= 1) {
+        return {
+            data: null,
+            error: {
+                message:
+                    'Não é permitido apagar o último item da cotação'
+            }
+        };
+    }
+
+    // =========================
+    // APAGAR ORÇAMENTOS DO ITEM
+    // =========================
+
+    const erroOrcamentos = await apagarOrcamentosDoItem(id);
+
+    if (erroOrcamentos) {
+        return {
+            data: null,
+            error: erroOrcamentos
+        };
+    }
+
     // =========================
     // DELETAR
     // =========================
 
-    return await supabase
+    const deletado = await supabase
         .from('cotacao_itens')
         .delete()
         .eq('id', id);
+
+    if (deletado.error) {
+        return deletado;
+    }
+
+    const {
+        error: statusError
+    } = await aplicarStatusCotacaoPorFatos(item.cotacao_id);
+
+    if (statusError) {
+        return {
+            data: null,
+            error: statusError
+        };
+    }
+
+    return deletado;
 };
+
+async function apagarOrcamentosDoItem(itemId) {
+    const {
+        data: linhas,
+        error: linhasError
+    } = await supabase
+        .from('cotacao_proposta_itens')
+        .select('id, proposta_id')
+        .eq('item_id', itemId);
+
+    if (linhasError) {
+        return linhasError;
+    }
+
+    if (!linhas || linhas.length === 0) {
+        return null;
+    }
+
+    const propostaIds = [
+        ...new Set(linhas.map((linha) => linha.proposta_id))
+    ];
+
+    const {
+        error: deleteLinhasError
+    } = await supabase
+        .from('cotacao_proposta_itens')
+        .delete()
+        .eq('item_id', itemId);
+
+    if (deleteLinhasError) {
+        return deleteLinhasError;
+    }
+
+    for (const propostaId of propostaIds) {
+        const erroEnvelope = await sincronizarValorTotalDoEnvelope(propostaId);
+
+        if (erroEnvelope) {
+            return erroEnvelope;
+        }
+    }
+
+    return null;
+}
+
+async function recalcularTotaisDoItem(itemId, quantidade) {
+    const {
+        data: linhas,
+        error: linhasError
+    } = await supabase
+        .from('cotacao_proposta_itens')
+        .select('id, proposta_id, valor_unitario')
+        .eq('item_id', itemId);
+
+    if (linhasError) {
+        return linhasError;
+    }
+
+    if (!linhas || linhas.length === 0) {
+        return null;
+    }
+
+    const propostaIds = new Set();
+
+    for (const linha of linhas) {
+        const valorTotal =
+            Number(quantidade) * Number(linha.valor_unitario);
+
+        const { error: erroLinha } = await supabase
+            .from('cotacao_proposta_itens')
+            .update({
+                valor_total: valorTotal
+            })
+            .eq('id', linha.id);
+
+        if (erroLinha) {
+            return erroLinha;
+        }
+
+        propostaIds.add(linha.proposta_id);
+    }
+
+    for (const propostaId of propostaIds) {
+        const erroEnvelope = await sincronizarValorTotalDoEnvelope(propostaId);
+
+        if (erroEnvelope) {
+            return erroEnvelope;
+        }
+    }
+
+    return null;
+}
+
+async function sincronizarValorTotalDoEnvelope(propostaId) {
+    const {
+        data: restantes,
+        error: restantesError
+    } = await supabase
+        .from('cotacao_proposta_itens')
+        .select('id, valor_total')
+        .eq('proposta_id', propostaId);
+
+    if (restantesError) {
+        return restantesError;
+    }
+
+    if (!restantes || restantes.length === 0) {
+        const { error: erroEnvelope } = await supabase
+            .from('cotacao_propostas')
+            .delete()
+            .eq('id', propostaId);
+
+        return erroEnvelope || null;
+    }
+
+    const valorTotal = restantes.reduce(
+        (soma, restante) => soma + Number(restante.valor_total || 0),
+        0
+    );
+
+    const { error: erroEnvelope } = await supabase
+        .from('cotacao_propostas')
+        .update({
+            valor_total: valorTotal
+        })
+        .eq('id', propostaId);
+
+    return erroEnvelope || null;
+}

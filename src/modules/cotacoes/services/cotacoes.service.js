@@ -61,7 +61,10 @@ export const listarCotacoes = async (
 // =========================
 export const buscarCotacaoPorId = async (id) => {
 
-    return await supabase
+    const {
+        data,
+        error
+    } = await supabase
         .from('cotacoes')
         .select(`
             *,
@@ -75,6 +78,7 @@ export const buscarCotacaoPorId = async (id) => {
             ),
             cotacao_itens (
                 id,
+                cotacao_id,
                 produto_id,
                 descricao,
                 quantidade,
@@ -86,7 +90,108 @@ export const buscarCotacaoPorId = async (id) => {
         `)
         .eq('id', id)
         .single();
+
+    if (error || !data) {
+        return {
+            data,
+            error
+        };
+    }
+
+    const {
+        data: cotacao,
+        error: orcamentosError
+    } = await anexarOrcamentosAosItens(data);
+
+    if (orcamentosError) {
+        return {
+            data: null,
+            error: orcamentosError
+        };
+    }
+
+    return {
+        data: cotacao,
+        error: null
+    };
 };
+
+function nomeDoFornecedor(fornecedor) {
+    return fornecedor?.nome_fantasia
+        || fornecedor?.razao_social
+        || '';
+}
+
+async function anexarOrcamentosAosItens(cotacao) {
+    const itens = (cotacao.cotacao_itens || []).map((item) => ({
+        ...item,
+        orcamentos: []
+    }));
+
+    const {
+        data: propostas,
+        error
+    } = await supabase
+        .from('cotacao_propostas')
+        .select(`
+            id,
+            fornecedor_id,
+            fornecedores:fornecedor_id (
+                razao_social,
+                nome_fantasia
+            ),
+            cotacao_proposta_itens (
+                id,
+                item_id,
+                valor_unitario,
+                valor_total,
+                selecionada
+            )
+        `)
+        .eq('cotacao_id', cotacao.id);
+
+    if (error) {
+        return {
+            data: null,
+            error
+        };
+    }
+
+    const itensPorId = new Map(
+        itens.map((item) => [item.id, item])
+    );
+
+    for (const proposta of propostas || []) {
+        const fornecedorNome = nomeDoFornecedor(
+            proposta.fornecedores
+        );
+
+        for (const linha of proposta.cotacao_proposta_itens || []) {
+            const item = itensPorId.get(linha.item_id);
+
+            if (!item) {
+                continue;
+            }
+
+            item.orcamentos.push({
+                id: linha.id,
+                fornecedor_id: proposta.fornecedor_id,
+                fornecedor_nome: fornecedorNome,
+                valor_unitario: Number(linha.valor_unitario),
+                valor_total: Number(linha.valor_total),
+                selecionada: linha.selecionada === true
+            });
+        }
+    }
+
+    return {
+        data: {
+            ...cotacao,
+            cotacao_itens: itens
+        },
+        error: null
+    };
+}
 
 // =========================
 // CRIAR COTAÇÃO + ITENS
@@ -434,19 +539,27 @@ export const alterarStatusProgressoCotacao = async (
     usuarioId
 ) => {
 
-    const statusPermitidos = [
+    const statusDerivados = [
         'aberta',
         'em_andamento',
         'pronta_para_analise',
-        'finalizada',
-        'cancelada'
+        'finalizada'
     ];
 
     // =========================
     // VALIDAR STATUS
     // =========================
 
-    if (!statusPermitidos.includes(status)) {
+    if (statusDerivados.includes(status)) {
+        return {
+            error: {
+                message:
+                    'O status de progresso é derivado automaticamente e não pode ser alterado manualmente'
+            }
+        };
+    }
+
+    if (status !== 'cancelada') {
         return {
             error: {
                 message:
