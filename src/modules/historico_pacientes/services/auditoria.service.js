@@ -6,7 +6,8 @@ export const registrarOcorrencia = async ({
     usuario_id,
     tipo_evento,
     descricao,
-    referencia_id = null
+    referencia_id = null,
+    idempotency_key = null
 }) => {
 
     return await inserirHistorico({
@@ -14,7 +15,8 @@ export const registrarOcorrencia = async ({
         usuario_id,
         tipo_evento,
         descricao,
-        referencia_id
+        referencia_id,
+        idempotency_key
     })
 }
 
@@ -23,17 +25,25 @@ export const registrarAuditoria = async ({
     entidade_id = null,
     acao,
     usuario_id = null,
-    dados = {}
+    dados = {},
+    idempotency_key = null
 }) => {
-    return await supabase
-        .from('auditoria_eventos')
-        .insert([{
+    const registro = {
             entidade_tipo,
             entidade_id,
             acao,
             usuario_id,
-            dados
-        }])
+            dados,
+            ...(idempotency_key ? { idempotency_key } : {})
+        }
+    const query = supabase.from('auditoria_eventos')
+
+    return await (idempotency_key
+        ? query.upsert([registro], {
+            onConflict: 'idempotency_key',
+            ignoreDuplicates: true
+        })
+        : query.insert([registro]))
         .select()
-        .single()
+        .maybeSingle()
 }
