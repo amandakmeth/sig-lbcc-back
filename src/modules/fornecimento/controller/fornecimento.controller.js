@@ -2,7 +2,10 @@ import {
     gerarOrdensDeFornecimento,
     listarOrdensDeFornecimento,
     buscarOrdemDeFornecimento,
-    confirmarRecebimentoOrdemDeFornecimento
+    confirmarRecebimentoOrdemDeFornecimento,
+    listarGestoresResponsaveis,
+    atualizarPrazoOrdem,
+    atualizarStatusPrazoOrdem
 } from '../services/fornecimento.services.js';
 
 import { registrarOcorrencia } from '../../historico_pacientes/services/auditoria.service.js';
@@ -177,4 +180,51 @@ export async function confirmarRecebimento(req, res) {
                 'Erro interno ao confirmar recebimento da ordem de fornecimento'
         });
     }
+}
+
+export async function listarGestores(req, res) {
+    const { data, error } = await listarGestoresResponsaveis();
+    if (error) return res.status(500).json({ message: error.message });
+    return res.json(data);
+}
+
+export async function atualizarPrazo(req, res) {
+    if (req.user?.perfil !== 'gestor') {
+        return res.status(403).json({ message: 'Apenas gestor pode alterar prazo e responsaveis' });
+    }
+
+    const body = req.body || {};
+    const responsavelIds = body.responsavel_ids ?? body.gestor_ids;
+    const resultado = await atualizarPrazoOrdem({
+        id: req.params.id,
+        dataPrevisaoEntrega: body.data_previsao_entrega,
+        responsavelIds,
+        atualizadoPor: req.user.id
+    });
+
+    if (resultado.error) {
+        const status = resultado.error.message?.includes('nao encontrada') ? 404 : 400;
+        return res.status(status).json({ message: resultado.error.message });
+    }
+
+    return res.json(resultado.data);
+}
+
+export async function atualizarStatusPrazo(req, res) {
+    if (req.user?.perfil !== 'gestor') {
+        return res.status(403).json({ message: 'Apenas gestor pode alterar status de prazo' });
+    }
+
+    const resultado = await atualizarStatusPrazoOrdem({
+        id: req.params.id,
+        statusPrazo: req.body?.status_prazo,
+        usuarioId: req.user.id
+    });
+
+    if (resultado.error) {
+        const status = resultado.error.message?.includes('nao encontrada') ? 404 : 400;
+        return res.status(status).json({ message: resultado.error.message });
+    }
+
+    return res.json(resultado.data);
 }

@@ -1,4 +1,185 @@
 import supabase from '../../../config/supabase.js';
+import {
+    calculateDeadlineStatus,
+    getBrasiliaDate,
+    STATUS_PRAZO,
+    toDateOnly
+} from './prazo.utils.js';
+import { listarDatasFeriadosAtivos } from '../../calendario/services/calendario.service.js';
+import {
+    registrarAuditoria,
+    registrarOcorrencia
+} from '../../historico_pacientes/services/auditoria.service.js';
+
+const ORDEM_SELECT = `
+    id,
+    numero,
+    cotacao_id,
+    proposta_id,
+    fornecedor_id,
+    paciente_id,
+    status,
+    data_emissao,
+    data_envio,
+    data_previsao_entrega,
+    data_entrega,
+    data_finalizacao,
+    prazo_ciclo,
+    status_prazo,
+    prazo_atualizado_em,
+    valor_total,
+    observacoes,
+    criado_por,
+    atualizado_por,
+    created_at,
+    updated_at,
+    fornecedores (
+        id,
+        razao_social,
+        nome_fantasia,
+        cnpj,
+        email,
+        telefone
+    ),
+    ordem_fornecimento_itens (
+        id,
+        cotacao_item_id,
+        proposta_id,
+        produto_id,
+        descricao,
+        quantidade_solicitada,
+        quantidade_entregue,
+        unidade,
+        valor_unitario,
+        valor_total,
+        observacoes
+    ),
+    ordem_fornecimento_responsaveis (
+        usuario_id,
+        usuarios:usuario_id (
+            id,
+            nome,
+            email,
+            perfil,
+            ativo
+        )
+    )
+`;
+
+function normalizarOrdem(ordem) {
+    if (!ordem) return ordem;
+
+    return {
+        ...ordem,
+        gestores_responsaveis: (ordem.ordem_fornecimento_responsaveis || [])
+            .map((item) => item.usuarios)
+            .filter(Boolean)
+    };
+}
+
+async function obterFeriadosAtivos() {
+    const resultado = await listarDatasFeriadosAtivos();
+    if (resultado.error) throw resultado.error;
+    return resultado.data || [];
+}
+
+async function validarGestores(responsavelIds = []) {
+    const ids = [...new Set(responsavelIds)];
+    if (ids.some((id) => typeof id !== 'string' || !id.trim())) {
+        return { ids: [], error: { message: 'Gestores responsaveis invalidos' } };
+    }
+
+    if (ids.length === 0) return { ids, error: null };
+
+    const { data, error } = await supabase
+        .from('usuarios')
+        .select('id, nome, email, perfil, ativo')
+        .in('id', ids);
+
+    if (error) return { ids, error };
+
+    const encontrados = new Map((data || []).map((usuario) => [usuario.id, usuario]));
+    const invalidos = ids.filter((id) => {
+        const usuario = encontrados.get(id);
+        return !usuario || usuario.perfil !== 'gestor' || usuario.ativo === false;
+    });
+
+    if (invalidos.length > 0) {
+        return {
+            ids,
+            error: { message: 'Todos os responsaveis devem ser gestores ativos' }
+        };
+    }
+
+    return { ids, error: null };
+}
+
+async function obterResponsaveis(ordemId) {
+    const { data, error } = await supabase
+        .from('ordem_fornecimento_responsaveis')
+        .select('usuario_id')
+        .eq('ordem_fornecimento_id', ordemId);
+
+    return {
+        ids: (data || []).map((item) => item.usuario_id).sort(),
+        error
+    };
+}
+
+async function registrarAlteracaoDePrazo({
+    ordem,
+    ciclo,
+    dataLimite,
+    statusPrazo,
+    tipoEvento,
+    responsavelIds,
+    usuarioId
+}) {
+    const historico = await supabase
+        .from('ordem_fornecimento_prazo_historico')
+        .insert([{
+            ordem_fornecimento_id: ordem.id,
+            ciclo,
+            data_limite: dataLimite,
+            status_prazo: statusPrazo,
+            tipo_evento: tipoEvento,
+            responsavel_ids: responsavelIds,
+            usuario_id: usuarioId || null
+        }])
+        .select()
+        .single();
+
+    if (historico.error) return historico.error;
+
+    const auditoria = await registrarAuditoria({
+        entidade_tipo: 'ordem_fornecimento_prazo',
+        entidade_id: ordem.id,
+        acao: tipoEvento,
+        usuario_id: usuarioId || null,
+        dados: {
+            ciclo,
+            data_limite: dataLimite,
+            status_prazo: statusPrazo,
+            responsavel_ids: responsavelIds
+        }
+    });
+
+    if (auditoria.error) return auditoria.error;
+
+    if (ordem.paciente_id) {
+        const ocorrencia = await registrarOcorrencia({
+            paciente_id: ordem.paciente_id,
+            usuario_id: usuarioId || null,
+            tipo_evento: `OF_${tipoEvento}`,
+            descricao: `Prazo da Ordem de Fornecimento ${ordem.numero} atualizado: ${statusPrazo}`,
+            referencia_id: ordem.id
+        });
+
+        if (ocorrencia.error) return ocorrencia.error;
+    }
+
+    return null;
+}
 
 // =========================
 // GERAR ORDENS DE FORNECIMENTO
@@ -157,6 +338,8 @@ export async function gerarOrdensDeFornecimento({
                 fornecedor_id: grupo.fornecedor_id,
                 paciente_id: cotacao.paciente_id,
                 status: 'rascunho',
+                prazo_ciclo: 1,
+                status_prazo: STATUS_PRAZO.NORMAL,
                 valor_total: valorTotal,
                 criado_por: criadoPor || null
             }])
@@ -214,7 +397,7 @@ export async function gerarOrdensDeFornecimento({
         }
 
         ordensCriadas.push({
-            ...ordem,
+            ...normalizarOrdem(ordem),
             itens: itensCriados
         });
     }
@@ -281,47 +464,7 @@ export async function listarOrdensDeFornecimento() {
         error
     } = await supabase
         .from('ordens_fornecimento')
-        .select(`
-            id,
-            numero,
-            cotacao_id,
-            proposta_id,
-            fornecedor_id,
-            paciente_id,
-            status,
-            data_emissao,
-            data_envio,
-            data_previsao_entrega,
-            data_entrega,
-            data_finalizacao,
-            valor_total,
-            observacoes,
-            criado_por,
-            atualizado_por,
-            created_at,
-            updated_at,
-            fornecedores (
-                id,
-                razao_social,
-                nome_fantasia,
-                cnpj,
-                email,
-                telefone
-            ),
-            ordem_fornecimento_itens (
-                id,
-                cotacao_item_id,
-                proposta_id,
-                produto_id,
-                descricao,
-                quantidade_solicitada,
-                quantidade_entregue,
-                unidade,
-                valor_unitario,
-                valor_total,
-                observacoes
-            )
-        `)
+        .select(ORDEM_SELECT)
         .order('created_at', {
             ascending: false
         });
@@ -334,7 +477,7 @@ export async function listarOrdensDeFornecimento() {
     }
 
     return {
-        data,
+        data: (data || []).map(normalizarOrdem),
         error: null
     };
 }
@@ -350,47 +493,7 @@ export async function buscarOrdemDeFornecimento(id) {
         error
     } = await supabase
         .from('ordens_fornecimento')
-        .select(`
-            id,
-            numero,
-            cotacao_id,
-            proposta_id,
-            fornecedor_id,
-            paciente_id,
-            status,
-            data_emissao,
-            data_envio,
-            data_previsao_entrega,
-            data_entrega,
-            data_finalizacao,
-            valor_total,
-            observacoes,
-            criado_por,
-            atualizado_por,
-            created_at,
-            updated_at,
-            fornecedores (
-                id,
-                razao_social,
-                nome_fantasia,
-                cnpj,
-                email,
-                telefone
-            ),
-            ordem_fornecimento_itens (
-                id,
-                cotacao_item_id,
-                proposta_id,
-                produto_id,
-                descricao,
-                quantidade_solicitada,
-                quantidade_entregue,
-                unidade,
-                valor_unitario,
-                valor_total,
-                observacoes
-            )
-        `)
+        .select(ORDEM_SELECT)
         .eq('id', id)
         .single();
 
@@ -404,7 +507,7 @@ export async function buscarOrdemDeFornecimento(id) {
     }
 
     return {
-        data,
+        data: normalizarOrdem(data),
         error: null
     };
 }
@@ -477,47 +580,7 @@ export async function confirmarRecebimentoOrdemDeFornecimento({
             atualizado_por: atualizadoPor || null
         })
         .eq('id', id)
-        .select(`
-            id,
-            numero,
-            cotacao_id,
-            proposta_id,
-            fornecedor_id,
-            paciente_id,
-            status,
-            data_emissao,
-            data_envio,
-            data_previsao_entrega,
-            data_entrega,
-            data_finalizacao,
-            valor_total,
-            observacoes,
-            criado_por,
-            atualizado_por,
-            created_at,
-            updated_at,
-            fornecedores (
-                id,
-                razao_social,
-                nome_fantasia,
-                cnpj,
-                email,
-                telefone
-            ),
-            ordem_fornecimento_itens (
-                id,
-                cotacao_item_id,
-                proposta_id,
-                produto_id,
-                descricao,
-                quantidade_solicitada,
-                quantidade_entregue,
-                unidade,
-                valor_unitario,
-                valor_total,
-                observacoes
-            )
-        `)
+        .select(ORDEM_SELECT)
         .single();
 
     if (error) {
@@ -528,7 +591,172 @@ export async function confirmarRecebimentoOrdemDeFornecimento({
     }
 
     return {
-        data,
+        data: normalizarOrdem(data),
         error: null
     };
+}
+
+export async function listarGestoresResponsaveis() {
+    return await supabase
+        .from('usuarios')
+        .select('id, nome, email, perfil, ativo')
+        .eq('perfil', 'gestor')
+        .eq('ativo', true)
+        .order('nome', { ascending: true });
+}
+
+export async function atualizarPrazoOrdem({
+    id,
+    dataPrevisaoEntrega,
+    responsavelIds,
+    atualizadoPor
+}) {
+    const { data: ordem, error: buscaError } = await supabase
+        .from('ordens_fornecimento')
+        .select('id, numero, paciente_id, data_previsao_entrega, prazo_ciclo, status_prazo')
+        .eq('id', id)
+        .single();
+
+    if (buscaError || !ordem) {
+        return { data: null, error: { message: 'Ordem de fornecimento nao encontrada' } };
+    }
+
+    const dataFoiEnviada = dataPrevisaoEntrega !== undefined;
+    const novaData = dataFoiEnviada
+        ? (dataPrevisaoEntrega === null ? null : toDateOnly(dataPrevisaoEntrega))
+        : toDateOnly(ordem.data_previsao_entrega);
+
+    if (dataFoiEnviada && dataPrevisaoEntrega !== null && !novaData) {
+        return { data: null, error: { message: 'A data limite deve estar no formato AAAA-MM-DD' } };
+    }
+
+    const responsaveisAtuais = await obterResponsaveis(id);
+    if (responsaveisAtuais.error) return { data: null, error: responsaveisAtuais.error };
+
+    const responsaveisForamEnviados = responsavelIds !== undefined;
+    const novaValidacao = await validarGestores(
+        responsaveisForamEnviados ? responsavelIds : responsaveisAtuais.ids
+    );
+    if (novaValidacao.error) return { data: null, error: novaValidacao.error };
+
+    const novosResponsaveis = novaValidacao.ids.sort();
+    const dataMudou = novaData !== toDateOnly(ordem.data_previsao_entrega);
+    const responsaveisMudaram = novosResponsaveis.join(',') !== responsaveisAtuais.ids.join(',');
+
+    if (!dataMudou && !responsaveisMudaram) {
+        return await buscarOrdemDeFornecimento(id);
+    }
+
+    let novoStatus = ordem.status_prazo || STATUS_PRAZO.NORMAL;
+    if (dataMudou) {
+        let feriados = [];
+        try {
+            feriados = await obterFeriadosAtivos();
+        } catch (error) {
+            return { data: null, error };
+        }
+
+        novoStatus = calculateDeadlineStatus({
+            deadline: novaData,
+            today: getBrasiliaDate(),
+            holidays: feriados
+        });
+    }
+
+    const novoCiclo = dataMudou
+        ? Number(ordem.prazo_ciclo || 1) + 1
+        : Number(ordem.prazo_ciclo || 1);
+
+    const { error: updateError } = await supabase
+        .from('ordens_fornecimento')
+        .update({
+            ...(dataFoiEnviada ? { data_previsao_entrega: novaData } : {}),
+            prazo_ciclo: novoCiclo,
+            status_prazo: novoStatus,
+            prazo_atualizado_em: new Date().toISOString(),
+            atualizado_por: atualizadoPor || null
+        })
+        .eq('id', id);
+
+    if (updateError) return { data: null, error: updateError };
+
+    if (responsaveisMudaram) {
+        const { error: deleteError } = await supabase
+            .from('ordem_fornecimento_responsaveis')
+            .delete()
+            .eq('ordem_fornecimento_id', id);
+
+        if (deleteError) return { data: null, error: deleteError };
+
+        if (novosResponsaveis.length > 0) {
+            const { error: insertError } = await supabase
+                .from('ordem_fornecimento_responsaveis')
+                .insert(novosResponsaveis.map((usuarioId) => ({
+                    ordem_fornecimento_id: id,
+                    usuario_id: usuarioId
+                })));
+
+            if (insertError) return { data: null, error: insertError };
+        }
+    }
+
+    const tipoEvento = dataMudou
+        ? 'PRAZO_CICLO_ATUALIZADO'
+        : 'RESPONSAVEIS_ATUALIZADOS';
+    const auditoriaError = await registrarAlteracaoDePrazo({
+        ordem,
+        ciclo: novoCiclo,
+        dataLimite: novaData,
+        statusPrazo: novoStatus,
+        tipoEvento,
+        responsavelIds: novosResponsaveis,
+        usuarioId: atualizadoPor
+    });
+
+    if (auditoriaError) return { data: null, error: auditoriaError };
+
+    return await buscarOrdemDeFornecimento(id);
+}
+
+export async function atualizarStatusPrazoOrdem({ id, statusPrazo, usuarioId }) {
+    if (!Object.values(STATUS_PRAZO).includes(statusPrazo)) {
+        return { data: null, error: { message: 'Status de prazo invalido' } };
+    }
+
+    const { data: ordem, error: buscaError } = await supabase
+        .from('ordens_fornecimento')
+        .select('id, numero, paciente_id, data_previsao_entrega, prazo_ciclo')
+        .eq('id', id)
+        .single();
+
+    if (buscaError || !ordem) {
+        return { data: null, error: { message: 'Ordem de fornecimento nao encontrada' } };
+    }
+
+    const { data: responsaveis, error: responsaveisError } = await obterResponsaveis(id);
+    if (responsaveisError) return { data: null, error: responsaveisError };
+
+    const { error: updateError } = await supabase
+        .from('ordens_fornecimento')
+        .update({
+            status_prazo: statusPrazo,
+            prazo_atualizado_em: new Date().toISOString(),
+            atualizado_por: usuarioId || null
+        })
+        .eq('id', id);
+
+    if (updateError) return { data: null, error: updateError };
+
+    const auditoriaError = await registrarAlteracaoDePrazo({
+        ordem,
+        ciclo: Number(ordem.prazo_ciclo || 1),
+        dataLimite: toDateOnly(ordem.data_previsao_entrega),
+        statusPrazo,
+        tipoEvento: 'STATUS_PRAZO_ATUALIZADO',
+        responsavelIds: responsaveis,
+        usuarioId
+    });
+
+    if (auditoriaError) return { data: null, error: auditoriaError };
+    return await buscarOrdemDeFornecimento(id);
 }

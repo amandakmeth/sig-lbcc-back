@@ -4,7 +4,10 @@ import {
     gerarOrdens,
     listarOrdens,
     buscarOrdem,
-    confirmarRecebimento
+    confirmarRecebimento,
+    listarGestores,
+    atualizarPrazo,
+    atualizarStatusPrazo
 } from '../controller/fornecimento.controller.js';
 
 import { authMiddleware } from '../../auth/middlewares/auth.middleware.js';
@@ -86,6 +89,11 @@ router.get(
     listarOrdens
 );
 
+router.get(
+    '/gestores-responsaveis',
+    listarGestores
+);
+
 
 // =========================
 // CONFIRMAR RECEBIMENTO
@@ -122,6 +130,16 @@ router.get(
 router.patch(
     '/:id/confirmar-recebimento',
     confirmarRecebimento
+);
+
+router.patch(
+    '/:id/prazo',
+    atualizarPrazo
+);
+
+router.patch(
+    '/:id/status-prazo',
+    atualizarStatusPrazo
 );
 
 
