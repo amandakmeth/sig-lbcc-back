@@ -409,3 +409,126 @@ export async function buscarOrdemDeFornecimento(id) {
     };
 }
 
+
+// =========================
+// CONFIRMAR RECEBIMENTO
+// =========================
+
+export async function confirmarRecebimentoOrdemDeFornecimento({
+    id,
+    atualizadoPor
+}) {
+
+    // =========================
+    // BUSCAR ORDEM
+    // =========================
+
+    const {
+        data: ordem,
+        error: buscaError
+    } = await supabase
+        .from('ordens_fornecimento')
+        .select(`
+            id,
+            numero,
+            paciente_id,
+            status
+        `)
+        .eq('id', id)
+        .single();
+
+    if (buscaError || !ordem) {
+        return {
+            data: null,
+            error: {
+                message:
+                    'Ordem de fornecimento não encontrada'
+            }
+        };
+    }
+
+
+    // =========================
+    // VALIDAR STATUS
+    // =========================
+
+    if (ordem.status !== 'enviada') {
+        return {
+            data: null,
+            error: {
+                message:
+                    'A confirmação de recebimento só pode ser realizada para uma ordem de fornecimento com status enviada'
+            }
+        };
+    }
+
+
+    // =========================
+    // ATUALIZAR ORDEM
+    // =========================
+
+    const {
+        data,
+        error
+    } = await supabase
+        .from('ordens_fornecimento')
+        .update({
+            status: 'em_entrega',
+            atualizado_por: atualizadoPor || null
+        })
+        .eq('id', id)
+        .select(`
+            id,
+            numero,
+            cotacao_id,
+            proposta_id,
+            fornecedor_id,
+            paciente_id,
+            status,
+            data_emissao,
+            data_envio,
+            data_previsao_entrega,
+            data_entrega,
+            data_finalizacao,
+            valor_total,
+            observacoes,
+            criado_por,
+            atualizado_por,
+            created_at,
+            updated_at,
+            fornecedores (
+                id,
+                razao_social,
+                nome_fantasia,
+                cnpj,
+                email,
+                telefone
+            ),
+            ordem_fornecimento_itens (
+                id,
+                cotacao_item_id,
+                proposta_id,
+                produto_id,
+                descricao,
+                quantidade_solicitada,
+                quantidade_entregue,
+                unidade,
+                valor_unitario,
+                valor_total,
+                observacoes
+            )
+        `)
+        .single();
+
+    if (error) {
+        return {
+            data: null,
+            error
+        };
+    }
+
+    return {
+        data,
+        error: null
+    };
+}

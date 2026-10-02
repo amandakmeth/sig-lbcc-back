@@ -3,7 +3,8 @@ import express from 'express';
 import {
     gerarOrdens,
     listarOrdens,
-    buscarOrdem
+    buscarOrdem,
+    confirmarRecebimento
 } from '../controller/fornecimento.controller.js';
 
 import { authMiddleware } from '../../auth/middlewares/auth.middleware.js';
@@ -19,9 +20,11 @@ router.use(authMiddleware);
  *   description: Gestão de ordens de fornecimento
  */
 
+
 // =========================
 // GERAR ORDENS DE FORNECIMENTO
 // =========================
+
 /**
  * @swagger
  * /fornecimento/cotacoes/{cotacaoId}/gerar:
@@ -49,14 +52,17 @@ router.use(authMiddleware);
  *       500:
  *         description: Erro interno ao gerar ordens de fornecimento
  */
+
 router.post(
     '/cotacoes/:cotacaoId/gerar',
     gerarOrdens
 );
 
+
 // =========================
 // LISTAR ORDENS DE FORNECIMENTO
 // =========================
+
 /**
  * @swagger
  * /fornecimento:
@@ -74,14 +80,55 @@ router.post(
  *       500:
  *         description: Erro interno ao listar ordens de fornecimento
  */
+
 router.get(
     '/',
     listarOrdens
 );
 
+
+// =========================
+// CONFIRMAR RECEBIMENTO
+// =========================
+
+/**
+ * @swagger
+ * /fornecimento/{id}/confirmar-recebimento:
+ *   patch:
+ *     summary: Confirma o recebimento da ordem de fornecimento
+ *     description: Registra a confirmação de recebimento da Ordem de Fornecimento pelo fornecedor e altera seu status de enviada para em_entrega.
+ *     tags: [Fornecimento]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: ID da ordem de fornecimento
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: Recebimento confirmado com sucesso
+ *       400:
+ *         description: Ordem inexistente ou não está com status enviada
+ *       401:
+ *         description: Sem autenticação
+ *       500:
+ *         description: Erro interno ao confirmar recebimento
+ */
+
+router.patch(
+    '/:id/confirmar-recebimento',
+    confirmarRecebimento
+);
+
+
 // =========================
 // BUSCAR ORDEM DE FORNECIMENTO
 // =========================
+
 /**
  * @swagger
  * /fornecimento/{id}:
@@ -109,10 +156,11 @@ router.get(
  *       500:
  *         description: Erro interno ao buscar ordem de fornecimento
  */
+
 router.get(
     '/:id',
     buscarOrdem
 );
 
-export default router;
 
+export default router;
