@@ -199,10 +199,27 @@ export const verificarRelacionamentosUsuarioService =
         return { error: error3 }
     }
 
+    // GESTORES RESPONSAVEIS POR ORDENS DE FORNECIMENTO
+    const {
+        count: ordensResponsavel,
+        error: error4
+    } = await supabase
+        .from('ordem_fornecimento_responsaveis')
+        .select('*', {
+            count: 'exact',
+            head: true
+        })
+        .eq('usuario_id', id)
+
+    if (error4) {
+        return { error: error4 }
+    }
+
     const possuiRelacionamentos =
         (pacientesCreated || 0) > 0 ||
         (pacientesUpdated || 0) > 0 ||
-        (documentos || 0) > 0
+        (documentos || 0) > 0 ||
+        (ordensResponsavel || 0) > 0
 
     return {
         data: {
@@ -210,7 +227,8 @@ export const verificarRelacionamentosUsuarioService =
             relacionamentos: {
                 pacientesCreated: pacientesCreated || 0,
                 pacientesUpdated: pacientesUpdated || 0,
-                documentos: documentos || 0
+                documentos: documentos || 0,
+                ordensResponsavel: ordensResponsavel || 0
             }
         }
     }
