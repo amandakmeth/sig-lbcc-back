@@ -57,7 +57,8 @@ export const inserirHistorico = async ({
     tipo_evento,
     descricao,
     referencia_id = null,
-    usuario_id = null
+    usuario_id = null,
+    idempotency_key = null
 }) => {
     if (!paciente_id || !tipo_evento || !descricao) {
         return {
@@ -67,17 +68,22 @@ export const inserirHistorico = async ({
         }
     }
 
-    const { data, error } = await supabase
-        .from('historico_pacientes')
-        .insert([
-            {
-                paciente_id,
-                tipo_evento,
-                descricao,
-                referencia_id,
-                usuario_id
-            }
-        ])
+    const registro = {
+        paciente_id,
+        tipo_evento,
+        descricao,
+        referencia_id,
+        usuario_id,
+        ...(idempotency_key ? { idempotency_key } : {})
+    }
+
+    const query = supabase.from('historico_pacientes')
+    const { data, error } = await (idempotency_key
+        ? query.upsert([registro], {
+            onConflict: 'idempotency_key',
+            ignoreDuplicates: true
+        })
+        : query.insert([registro]))
         .select()
 
     return { data, error }
