@@ -55,7 +55,7 @@ const ordemInsertBuilder = createBuilder({
         id: 'ordem-1',
         numero: 'OF-2026-0001',
         status: 'rascunho',
-        data_previsao_entrega: '2026-10-15',
+        data_previsao_entrega: '2026-10-21',
         prazo_ciclo: 1,
         status_prazo: 'normal'
     },
@@ -106,7 +106,7 @@ describe('geração da ordem de fornecimento', () => {
         jest.useRealTimers()
     })
 
-    it('persiste a data limite usando dias úteis e feriados', async () => {
+    it('inicia a ordem com 7 dias úteis, ignorando fins de semana e feriados ativos', async () => {
         const resultado = await gerarOrdensDeFornecimento({
             cotacaoId: 'cotacao-1',
             criadoPor: 'usuario-1'
@@ -114,9 +114,9 @@ describe('geração da ordem de fornecimento', () => {
 
         expect(resultado.error).toBeNull()
         expect(ordemInsertBuilder.inserted[0]).toEqual(expect.objectContaining({
-            data_previsao_entrega: '2026-10-15',
+            data_previsao_entrega: '2026-10-21',
             status_prazo: 'normal'
         }))
-        expect(resultado.data[0].data_previsao_entrega).toBe('2026-10-15')
+        expect(resultado.data[0].data_previsao_entrega).toBe('2026-10-21')
     })
 })
