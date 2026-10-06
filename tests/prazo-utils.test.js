@@ -1,10 +1,12 @@
 import {
+    addBusinessDays,
     calculateDeadlineStatus,
     countBusinessDaysInclusive,
     getBrasiliaDate,
     getNextBusinessDayAfter,
     isBusinessDay,
     isDeadlineOverdue,
+    parseBusinessDayCount,
     STATUS_PRAZO
 } from '../src/modules/fornecimento/services/prazo.utils.js'
 
@@ -18,6 +20,12 @@ describe('calendario institucional e prazo', () => {
     it('desconsidera feriados cadastrados', () => {
         expect(isBusinessDay('2026-10-12', ['2026-10-12'])).toBe(false)
         expect(countBusinessDaysInclusive('2026-10-09', '2026-10-13', ['2026-10-12'])).toBe(2)
+    })
+
+    it('calcula a data limite contando apenas dias uteis e ignorando feriados', () => {
+        expect(parseBusinessDayCount('5 dias úteis')).toBe(5)
+        expect(addBusinessDays('2026-10-09', 1, ['2026-10-12'])).toBe('2026-10-13')
+        expect(addBusinessDays('2026-10-09', 3, ['2026-10-12'])).toBe('2026-10-15')
     })
 
     it('marca como proximo quando ha ate tres dias uteis inclusivos', () => {

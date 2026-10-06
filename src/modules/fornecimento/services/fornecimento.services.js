@@ -1,7 +1,9 @@
 import supabase from '../../../config/supabase.js';
 import {
+    addBusinessDays,
     calculateDeadlineStatus,
     getBrasiliaDate,
+    parseBusinessDayCount,
     STATUS_PRAZO,
     toDateOnly
 } from './prazo.utils.js';
@@ -294,7 +296,8 @@ export async function gerarOrdensDeFornecimento({
             cotacao_propostas:proposta_id (
                 id,
                 cotacao_id,
-                fornecedor_id
+                fornecedor_id,
+                prazo_entrega
             ),
             cotacao_itens:item_id (
                 id,
@@ -342,6 +345,7 @@ export async function gerarOrdensDeFornecimento({
             fornecedores.set(fornecedorId, {
                 fornecedor_id: fornecedorId,
                 proposta_id: vencedor.proposta_id,
+                prazoEntrega: vencedor.cotacao_propostas.prazo_entrega,
                 itens: []
             });
         }
@@ -369,14 +373,50 @@ export async function gerarOrdensDeFornecimento({
             (ordem) => ordem.fornecedor_id
         )
     );
+    const gruposNovos = [...fornecedores.values()]
+        .filter((grupo) => !fornecedoresComOrdem.has(grupo.fornecedor_id));
+
+    if (gruposNovos.length === 0) {
+        return {
+            data: null,
+            error: {
+                message:
+                    'As ordens de fornecimento desta cotaÃ§Ã£o jÃ¡ foram geradas'
+            }
+        };
+    }
+
+    let feriados;
+    try {
+        feriados = await obterFeriadosAtivos();
+    } catch (error) {
+        return { data: null, error };
+    }
+
+    const dataBasePrazo = getBrasiliaDate();
+
+    for (const grupo of gruposNovos) {
+        grupo.prazoDiasUteis = parseBusinessDayCount(grupo.prazoEntrega);
+
+        if (!grupo.prazoDiasUteis) {
+            return {
+                data: null,
+                error: {
+                    message: 'A proposta vencedora deve informar o prazo de entrega em dias'
+                }
+            };
+        }
+
+        grupo.dataLimite = addBusinessDays(
+            dataBasePrazo,
+            grupo.prazoDiasUteis,
+            feriados
+        );
+    }
 
     const ordensCriadas = [];
 
-    for (const grupo of fornecedores.values()) {
-        if (fornecedoresComOrdem.has(grupo.fornecedor_id)) {
-            continue;
-        }
-
+    for (const grupo of gruposNovos) {
         const valorTotal = grupo.itens.reduce(
             (total, item) =>
                 total + Number(item.valor_total || 0),
@@ -397,8 +437,13 @@ export async function gerarOrdensDeFornecimento({
                 fornecedor_id: grupo.fornecedor_id,
                 paciente_id: cotacao.paciente_id,
                 status: 'rascunho',
+                data_previsao_entrega: grupo.dataLimite,
                 prazo_ciclo: 1,
-                status_prazo: STATUS_PRAZO.NORMAL,
+                status_prazo: calculateDeadlineStatus({
+                    deadline: grupo.dataLimite,
+                    today: dataBasePrazo,
+                    holidays: feriados
+                }),
                 valor_total: valorTotal,
                 criado_por: criadoPor || null
             }])

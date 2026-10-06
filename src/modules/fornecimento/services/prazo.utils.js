@@ -66,6 +66,18 @@ function getWeekday(value) {
     return parseDateOnly(value)?.getUTCDay()
 }
 
+export function parseBusinessDayCount(value) {
+    if (typeof value === 'number') {
+        return Number.isSafeInteger(value) && value > 0 ? value : null
+    }
+
+    const match = String(value || '').match(/\d+/)
+    if (!match) return null
+
+    const days = Number(match[0])
+    return Number.isSafeInteger(days) && days > 0 ? days : null
+}
+
 export function normalizeHolidayDates(holidays = []) {
     const values = holidays instanceof Set ? Array.from(holidays) : holidays
 
@@ -94,6 +106,23 @@ export function getNextBusinessDayAfter(value, holidays = []) {
 
     while (cursor && !isBusinessDay(cursor, holidays)) {
         cursor = addDays(cursor, 1)
+    }
+
+    return cursor
+}
+
+export function addBusinessDays(value, amount, holidays = []) {
+    const startDate = toDateOnly(value)
+    const days = Number(amount)
+
+    if (!startDate || !Number.isSafeInteger(days) || days < 0) return null
+
+    let cursor = startDate
+    let remaining = days
+
+    while (remaining > 0) {
+        cursor = addDays(cursor, 1)
+        if (isBusinessDay(cursor, holidays)) remaining -= 1
     }
 
     return cursor
