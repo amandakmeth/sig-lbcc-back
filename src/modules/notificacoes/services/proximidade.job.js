@@ -1,4 +1,4 @@
-import supabase from '../../../config/supabase.js'
+import supabaseAdmin from '../../../config/supabaseAdmin.js'
 import { listarDatasFeriadosAtivos } from '../../calendario/services/calendario.service.js'
 import {
     registrarAuditoria,
@@ -9,12 +9,19 @@ import {
     montarChaveDeNotificacao,
     NOTIFICACAO_TIPO
 } from './notificacoes.service.js'
+import { criarLembreteFornecedorPendente } from './lembretes-fornecedor.service.js'
 import {
     calculateDeadlineStatus,
     getBrasiliaDate,
     STATUS_PRAZO,
     toDateOnly
 } from '../../fornecimento/services/prazo.utils.js'
+import {
+    AUTOMACAO_JOB,
+    executarComLease,
+    registrarInconsistencia,
+    registrarItemExecucao
+} from '../../operacao/services/automacao.service.js'
 
 export const ACTIVE_ORDER_STATUSES = Object.freeze(['enviada', 'em_entrega'])
 
@@ -70,6 +77,64 @@ function responsaveisAtivos(ordem) {
         .filter((usuario) => usuario?.id && usuario.perfil === 'gestor' && usuario.ativo !== false)
 }
 
+export function diagnosticarInconsistencias(ordem) {
+    const inconsistencias = []
+
+    if (!ordem?.fornecedor_id || !ordem?.fornecedores) {
+        inconsistencias.push({
+            tipo: 'FORNECEDOR_AUSENTE',
+            descricao: 'A ordem nao possui fornecedor valido para a automacao.'
+        })
+    }
+
+    if (!ordem?.cotacao_id || !ordem?.cotacoes) {
+        inconsistencias.push({
+            tipo: 'COTACAO_AUSENTE',
+            descricao: 'A ordem nao possui cotacao valida para a automacao.'
+        })
+    }
+
+    if (!ordem?.paciente_id || !ordem?.pacientes) {
+        inconsistencias.push({
+            tipo: 'PACIENTE_AUSENTE',
+            descricao: 'A ordem nao possui paciente valido para a automacao.'
+        })
+    }
+
+    if (responsaveisAtivos(ordem).length === 0) {
+        inconsistencias.push({
+            tipo: 'GESTORES_RESPONSAVEIS_AUSENTES',
+            descricao: 'A ordem nao possui Gestor ativo responsavel para receber a notificacao.'
+        })
+    }
+
+    return inconsistencias
+}
+
+async function auditarInconsistencias(ordem, logger) {
+    const inconsistencias = diagnosticarInconsistencias(ordem)
+    for (const inconsistencia of inconsistencias) {
+        await registrarInconsistencia({
+            ordem,
+            tipo: inconsistencia.tipo,
+            descricao: inconsistencia.descricao,
+            dados: { ordem_numero: ordem.numero },
+            logger
+        })
+    }
+    return inconsistencias
+}
+
+async function registrarItemSeguro(dados, logger) {
+    const resultado = await registrarItemExecucao(dados)
+    if (resultado.error) {
+        logger.error?.('Falha ao registrar item da execucao de proximidade', {
+            ordemId: dados.ordemId,
+            error: resultado.error
+        })
+    }
+}
+
 export function isEligibleOrder(ordem) {
     return ACTIVE_ORDER_STATUSES.includes(ordem?.status)
         && Boolean(toDateOnly(ordem?.data_previsao_entrega))
@@ -111,7 +176,7 @@ export function buildProximityNotification({ ordem, destinatarioId }) {
 }
 
 async function buscarOrdemAtual(id) {
-    return await supabase
+    return await supabaseAdmin
         .from('ordens_fornecimento')
         .select(ORDER_SELECT)
         .eq('id', id)
@@ -124,7 +189,7 @@ async function registrarEventoDeProximidade(ordem, hoje) {
     const idempotencyKey = `of:${ordem.id}:ciclo:${ciclo}:proximidade`
     const responsavelIds = responsaveisAtivos(ordem).map((usuario) => usuario.id).sort()
 
-    const historico = await supabase
+    const historico = await supabaseAdmin
         .from('ordem_fornecimento_prazo_historico')
         .upsert([{
             ordem_fornecimento_id: ordem.id,
@@ -181,7 +246,7 @@ async function atualizarStatusCondicionalmente(ordem) {
         return { data: ordem, error: null }
     }
 
-    return await supabase
+    return await supabaseAdmin
         .from('ordens_fornecimento')
         .update({
             status_prazo: STATUS_PRAZO.PROXIMA_EXPIRACAO,
@@ -197,10 +262,15 @@ async function atualizarStatusCondicionalmente(ordem) {
         .maybeSingle()
 }
 
-async function processarOrdem(ordem, { hoje, feriados }) {
+async function processarOrdem(ordem, { hoje, feriados, now = new Date(), logger = console }) {
     if (!isEligibleOrder(ordem)) return { status: 'ignorada' }
 
     const dataLimite = toDateOnly(ordem.data_previsao_entrega)
+    // Depois do prazo, o job de proximidade não deve criar um novo alerta
+    // durante o intervalo não útil que antecede o primeiro dia de atraso.
+    if (dataLimite < hoje) {
+        return { status: 'fora_do_marco' }
+    }
     const statusCalculado = calculateDeadlineStatus({
         deadline: dataLimite,
         today: hoje,
@@ -210,6 +280,8 @@ async function processarOrdem(ordem, { hoje, feriados }) {
     if (statusCalculado !== STATUS_PRAZO.PROXIMA_EXPIRACAO) {
         return { status: 'fora_do_marco' }
     }
+
+    const inconsistencias = await auditarInconsistencias(ordem, logger)
 
     const atualizacao = await atualizarStatusCondicionalmente(ordem)
     if (atualizacao.error) return { status: 'erro', error: atualizacao.error }
@@ -238,19 +310,42 @@ async function processarOrdem(ordem, { hoje, feriados }) {
         if (resultado.data) notificacoes.push(resultado.data)
     }
 
+    // O lembrete e persistido separadamente. Uma falha nessa agenda ou no
+    // SMTP nao pode impedir a notificacao interna que acabou de ser criada.
+    const lembrete = await criarLembreteFornecedorPendente({
+        ordemId: atual.data.id,
+        prazoCiclo: Number(atual.data.prazo_ciclo || 1),
+        dataLimite,
+        now
+    })
+
+    if (lembrete.error) {
+        logger.error?.('Falha ao agendar lembrete do fornecedor', {
+            ordemId: atual.data.id,
+            error: lembrete.error
+        })
+    }
+
     return {
         status: 'alertada',
         transicionada: ordem.status_prazo !== STATUS_PRAZO.PROXIMA_EXPIRACAO,
-        notificacoes
+        notificacoes,
+        lembrete: lembrete.error ? null : lembrete.data,
+        lembreteError: lembrete.error || null,
+        inconsistencias: inconsistencias.length
     }
 }
 
-export async function executarJobDeProximidade({ now = new Date(), logger = console } = {}) {
+async function executarJobDeProximidadeInterno({
+    now = new Date(),
+    logger = console,
+    executionId = null
+} = {}) {
     const hoje = getBrasiliaDate(now)
     const feriadosResult = await listarDatasFeriadosAtivos()
     if (feriadosResult.error) throw feriadosResult.error
 
-    const ordensResult = await supabase
+    const ordensResult = await supabaseAdmin
         .from('ordens_fornecimento')
         .select(ORDER_SELECT)
         .in('status', ACTIVE_ORDER_STATUSES)
@@ -262,7 +357,12 @@ export async function executarJobDeProximidade({ now = new Date(), logger = cons
         hoje,
         examinadas: ordensResult.data?.length || 0,
         alertadas: 0,
+        transicionadas: 0,
         notificacoes: 0,
+        notificacoesCriadas: 0,
+        emailsEnviados: 0,
+        retentativas: 0,
+        inconsistencias: 0,
         ignoradas: 0,
         erros: 0
     }
@@ -271,20 +371,54 @@ export async function executarJobDeProximidade({ now = new Date(), logger = cons
         try {
             const resultado = await processarOrdem(ordem, {
                 hoje,
-                feriados: feriadosResult.data || []
+                feriados: feriadosResult.data || [],
+                now,
+                logger
             })
 
             if (resultado.status === 'alertada') {
                 resumo.alertadas += 1
+                if (resultado.transicionada) resumo.transicionadas += 1
                 resumo.notificacoes += resultado.notificacoes.length
+                resumo.notificacoesCriadas += resultado.notificacoes.length
+                resumo.inconsistencias += resultado.inconsistencias || 0
+                if (resultado.lembreteError) resumo.erros += 1
+                await registrarItemSeguro({
+                    execucaoId: executionId,
+                    ordemId: ordem.id,
+                    status: 'alertada',
+                    notificacoesCriadas: resultado.notificacoes.length,
+                    metadados: {
+                        transicionada: Boolean(resultado.transicionada),
+                        inconsistencias: resultado.inconsistencias || 0,
+                        notificacao_ids: resultado.notificacoes.map((item) => item.id).filter(Boolean),
+                        lembrete_id: resultado.lembrete?.id || null,
+                        lembrete_erro: resultado.lembreteError?.message || null
+                    },
+                    erro: resultado.lembreteError?.message || null
+                }, logger)
             } else if (resultado.status === 'erro') {
                 resumo.erros += 1
+                resumo.inconsistencias += resultado.inconsistencias || 0
                 logger.error?.('Erro ao processar alerta de proximidade', {
                     ordemId: ordem.id,
                     error: resultado.error
                 })
+                await registrarItemSeguro({
+                    execucaoId: executionId,
+                    ordemId: ordem.id,
+                    status: 'falha',
+                    erro: resultado.error?.message || 'Falha ao processar ordem',
+                    metadados: { inconsistencias: resultado.inconsistencias || 0 }
+                }, logger)
             } else {
                 resumo.ignoradas += 1
+                await registrarItemSeguro({
+                    execucaoId: executionId,
+                    ordemId: ordem.id,
+                    status: resultado.status,
+                    metadados: { motivo: resultado.status }
+                }, logger)
             }
         } catch (error) {
             resumo.erros += 1
@@ -292,10 +426,39 @@ export async function executarJobDeProximidade({ now = new Date(), logger = cons
                 ordemId: ordem.id,
                 error
             })
+            await registrarItemSeguro({
+                execucaoId: executionId,
+                ordemId: ordem.id,
+                status: 'falha',
+                erro: error.message,
+                metadados: { excecao: true }
+            }, logger)
         }
     }
 
     return resumo
+}
+
+export async function executarJobDeProximidade({
+    now = new Date(),
+    logger = console,
+    origem = 'automatico',
+    solicitanteId = null,
+    db
+} = {}) {
+    return await executarComLease({
+        jobNome: AUTOMACAO_JOB.PROXIMIDADE,
+        origem,
+        solicitanteId,
+        now,
+        logger,
+        db,
+        executar: ({ executionId }) => executarJobDeProximidadeInterno({
+            now,
+            logger,
+            executionId
+        })
+    })
 }
 
 export function iniciarJobDeProximidade({

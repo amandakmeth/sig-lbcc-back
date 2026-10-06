@@ -5,9 +5,14 @@ import {
     listarOrdens,
     buscarOrdem,
     confirmarRecebimento,
+    finalizarOrdem,
     listarGestores,
     atualizarPrazo,
-    atualizarStatusPrazo
+    atualizarStatusPrazo,
+    obterLembreteFornecedor,
+    reenviarLembreteFornecedor,
+    reenviarEmailOrdem,
+    baixarPdfOrdem
 } from '../controller/fornecimento.controller.js';
 
 import { authMiddleware } from '../../auth/middlewares/auth.middleware.js';
@@ -133,6 +138,11 @@ router.patch(
 );
 
 router.patch(
+    '/:id/finalizar',
+    finalizarOrdem
+);
+
+router.patch(
     '/:id/prazo',
     atualizarPrazo
 );
@@ -140,6 +150,26 @@ router.patch(
 router.patch(
     '/:id/status-prazo',
     atualizarStatusPrazo
+);
+
+router.get(
+    '/:id/lembrete-fornecedor',
+    obterLembreteFornecedor
+);
+
+router.post(
+    '/:id/lembrete-fornecedor/reenvio',
+    reenviarLembreteFornecedor
+);
+
+router.post(
+    '/:id/email/reenvio',
+    reenviarEmailOrdem
+);
+
+router.get(
+    '/:id/pdf',
+    baixarPdfOrdem
 );
 
 

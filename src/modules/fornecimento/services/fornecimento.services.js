@@ -21,6 +21,14 @@ const ORDEM_SELECT = `
     status,
     data_emissao,
     data_envio,
+    recebido_em,
+    recebido_por,
+    status_envio,
+    email_envio_tentativas,
+    email_envio_proxima_tentativa,
+    email_envio_ultimo_erro,
+    email_envio_ultima_tentativa_em,
+    email_envio_ultimo_sucesso_em,
     data_previsao_entrega,
     data_entrega,
     data_finalizacao,
@@ -63,6 +71,35 @@ const ORDEM_SELECT = `
             perfil,
             ativo
         )
+    ),
+    ordem_fornecimento_prazo_historico (
+        id,
+        ciclo,
+        data_limite,
+        status_prazo,
+        tipo_evento,
+        responsavel_ids,
+        usuario_id,
+        created_at
+    ),
+    ordens_fornecimento_envios (
+        id,
+        ciclo,
+        tentativa,
+        tipo,
+        status,
+        destinatario_email,
+        assunto,
+        nome_arquivo,
+        pdf_versao,
+        message_id,
+        erro,
+        metadados,
+        agendado_em,
+        iniciado_em,
+        enviado_em,
+        falhou_em,
+        created_at
     )
 `;
 
@@ -71,9 +108,15 @@ function normalizarOrdem(ordem) {
 
     return {
         ...ordem,
+        status_envio: ordem.status_envio || 'nao_enviado',
+        email_envio_tentativas: Number(ordem.email_envio_tentativas || 0),
+        envios_email: (ordem.ordens_fornecimento_envios || [])
+            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
         gestores_responsaveis: (ordem.ordem_fornecimento_responsaveis || [])
             .map((item) => item.usuarios)
-            .filter(Boolean)
+            .filter(Boolean),
+        prazo_historico: (ordem.ordem_fornecimento_prazo_historico || [])
+            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     };
 }
 
@@ -133,21 +176,35 @@ async function registrarAlteracaoDePrazo({
     statusPrazo,
     tipoEvento,
     responsavelIds,
-    usuarioId
+    usuarioId,
+    idempotencyKey = null,
+    tipoEventoPaciente = `OF_${tipoEvento}`,
+    descricao = null
 }) {
-    const historico = await supabase
+    const registro = {
+        ordem_fornecimento_id: ordem.id,
+        ciclo,
+        data_limite: dataLimite,
+        status_prazo: statusPrazo,
+        tipo_evento: tipoEvento,
+        responsavel_ids: responsavelIds,
+        usuario_id: usuarioId || null,
+        ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {})
+    }
+
+    const historicoQuery = supabase
         .from('ordem_fornecimento_prazo_historico')
-        .insert([{
-            ordem_fornecimento_id: ordem.id,
-            ciclo,
-            data_limite: dataLimite,
-            status_prazo: statusPrazo,
-            tipo_evento: tipoEvento,
-            responsavel_ids: responsavelIds,
-            usuario_id: usuarioId || null
-        }])
-        .select()
-        .single();
+    const historico = idempotencyKey
+        ? await historicoQuery.upsert([registro], {
+            onConflict: 'idempotency_key',
+            ignoreDuplicates: true
+        })
+            .select()
+            .maybeSingle()
+        : await historicoQuery
+            .insert([registro])
+            .select()
+            .single();
 
     if (historico.error) return historico.error;
 
@@ -161,7 +218,8 @@ async function registrarAlteracaoDePrazo({
             data_limite: dataLimite,
             status_prazo: statusPrazo,
             responsavel_ids: responsavelIds
-        }
+        },
+        ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {})
     });
 
     if (auditoria.error) return auditoria.error;
@@ -170,9 +228,10 @@ async function registrarAlteracaoDePrazo({
         const ocorrencia = await registrarOcorrencia({
             paciente_id: ordem.paciente_id,
             usuario_id: usuarioId || null,
-            tipo_evento: `OF_${tipoEvento}`,
-            descricao: `Prazo da Ordem de Fornecimento ${ordem.numero} atualizado: ${statusPrazo}`,
-            referencia_id: ordem.id
+            tipo_evento: tipoEventoPaciente,
+            descricao: descricao || `Prazo da Ordem de Fornecimento ${ordem.numero} atualizado: ${statusPrazo}`,
+            referencia_id: ordem.id,
+            ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {})
         });
 
         if (ocorrencia.error) return ocorrencia.error;
@@ -577,6 +636,8 @@ export async function confirmarRecebimentoOrdemDeFornecimento({
         .from('ordens_fornecimento')
         .update({
             status: 'em_entrega',
+            recebido_em: new Date().toISOString(),
+            recebido_por: atualizadoPor || null,
             atualizado_por: atualizadoPor || null
         })
         .eq('id', id)
@@ -596,6 +657,88 @@ export async function confirmarRecebimentoOrdemDeFornecimento({
     };
 }
 
+export async function finalizarOrdemDeFornecimento({
+    id,
+    atualizadoPor
+}) {
+    const { data: ordem, error: buscaError } = await supabase
+        .from('ordens_fornecimento')
+        .select('id, numero, paciente_id, status, data_previsao_entrega, prazo_ciclo, status_prazo')
+        .eq('id', id)
+        .single();
+
+    if (buscaError || !ordem) {
+        return { data: null, error: { message: 'Ordem de fornecimento nao encontrada' } };
+    }
+
+    if (ordem.status === 'finalizada') {
+        const responsaveis = await obterResponsaveis(id);
+        if (responsaveis.error) return { data: null, error: responsaveis.error };
+
+        const eventoError = await registrarAlteracaoDePrazo({
+            ordem,
+            ciclo: Number(ordem.prazo_ciclo || 1),
+            dataLimite: toDateOnly(ordem.data_previsao_entrega),
+            statusPrazo: ordem.status_prazo || STATUS_PRAZO.NORMAL,
+            tipoEvento: 'ORDEM_FINALIZADA',
+            tipoEventoPaciente: 'OF_FINALIZADA',
+            descricao: `A Ordem de Fornecimento ${ordem.numero} foi finalizada.`,
+            responsavelIds: responsaveis.ids,
+            usuarioId: atualizadoPor,
+            idempotencyKey: `of:${id}:finalizacao`
+        });
+
+        if (eventoError) return { data: null, error: eventoError };
+        return await buscarOrdemDeFornecimento(id);
+    }
+
+    if (['rascunho', 'cancelada'].includes(ordem.status)) {
+        return {
+            data: null,
+            error: { message: 'A ordem de fornecimento nao pode ser finalizada neste status' }
+        };
+    }
+
+    const { data: atualizada, error: updateError } = await supabase
+        .from('ordens_fornecimento')
+        .update({
+            status: 'finalizada',
+            data_finalizacao: new Date().toISOString(),
+            atualizado_por: atualizadoPor || null
+        })
+        .eq('id', id)
+        .in('status', ['enviada', 'em_entrega', 'entregue'])
+        .select('id')
+        .maybeSingle();
+
+    if (updateError) return { data: null, error: updateError };
+    if (!atualizada) {
+        return {
+            data: null,
+            error: { message: 'A ordem de fornecimento nao pode ser finalizada neste status' }
+        };
+    }
+
+    const responsaveis = await obterResponsaveis(id);
+    if (responsaveis.error) return { data: null, error: responsaveis.error };
+
+    const eventoError = await registrarAlteracaoDePrazo({
+        ordem,
+        ciclo: Number(ordem.prazo_ciclo || 1),
+        dataLimite: toDateOnly(ordem.data_previsao_entrega),
+        statusPrazo: ordem.status_prazo || STATUS_PRAZO.NORMAL,
+        tipoEvento: 'ORDEM_FINALIZADA',
+        tipoEventoPaciente: 'OF_FINALIZADA',
+        descricao: `A Ordem de Fornecimento ${ordem.numero} foi finalizada.`,
+        responsavelIds: responsaveis.ids,
+        usuarioId: atualizadoPor,
+        idempotencyKey: `of:${id}:finalizacao`
+    });
+
+    if (eventoError) return { data: null, error: eventoError };
+    return await buscarOrdemDeFornecimento(id);
+}
+
 export async function listarGestoresResponsaveis() {
     return await supabase
         .from('usuarios')
@@ -613,12 +756,16 @@ export async function atualizarPrazoOrdem({
 }) {
     const { data: ordem, error: buscaError } = await supabase
         .from('ordens_fornecimento')
-        .select('id, numero, paciente_id, data_previsao_entrega, prazo_ciclo, status_prazo')
+        .select('id, numero, paciente_id, status, data_previsao_entrega, prazo_ciclo, status_prazo')
         .eq('id', id)
         .single();
 
     if (buscaError || !ordem) {
         return { data: null, error: { message: 'Ordem de fornecimento nao encontrada' } };
+    }
+
+    if (['finalizada', 'cancelada'].includes(ordem.status)) {
+        return { data: null, error: { message: 'A ordem de fornecimento nao pode ter o prazo alterado neste status' } };
     }
 
     const dataFoiEnviada = dataPrevisaoEntrega !== undefined;
@@ -725,12 +872,16 @@ export async function atualizarStatusPrazoOrdem({ id, statusPrazo, usuarioId }) 
 
     const { data: ordem, error: buscaError } = await supabase
         .from('ordens_fornecimento')
-        .select('id, numero, paciente_id, data_previsao_entrega, prazo_ciclo')
+        .select('id, numero, paciente_id, status, data_previsao_entrega, prazo_ciclo, status_prazo')
         .eq('id', id)
         .single();
 
     if (buscaError || !ordem) {
         return { data: null, error: { message: 'Ordem de fornecimento nao encontrada' } };
+    }
+
+    if (['finalizada', 'cancelada'].includes(ordem.status)) {
+        return { data: null, error: { message: 'A ordem de fornecimento nao pode ter o status de prazo alterado neste status' } };
     }
 
     const { data: responsaveis, error: responsaveisError } = await obterResponsaveis(id);

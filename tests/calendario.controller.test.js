@@ -105,4 +105,28 @@ describe('calendario institucional - permissoes e auditoria', () => {
         expect(registrarAuditoria).toHaveBeenCalledWith(expect.objectContaining({ acao: 'FERIADO_EDITADO' }))
         expect(registrarAuditoria).toHaveBeenCalledWith(expect.objectContaining({ acao: 'FERIADO_INATIVADO' }))
     })
+
+    it('encaminha a nova data para a edicao do feriado', async () => {
+        const atual = { id: 'feriado-1', data: '2026-10-12', nome: 'Feriado antigo', ativo: true }
+        service.buscarFeriado.mockResolvedValue({ data: atual, error: null })
+        service.atualizarFeriado.mockResolvedValue({
+            data: { ...atual, data: '2026-11-02' },
+            error: null
+        })
+        const res = response()
+
+        await updateFeriado({
+            user: { id: 'gestor-1', perfil: 'gestor' },
+            params: { id: atual.id },
+            body: { data: '2026-11-02', nome: atual.nome }
+        }, res)
+
+        expect(res.statusCode).toBe(200)
+        expect(service.atualizarFeriado).toHaveBeenCalledWith({
+            id: atual.id,
+            data: '2026-11-02',
+            nome: atual.nome,
+            usuarioId: 'gestor-1'
+        })
+    })
 })

@@ -2,7 +2,9 @@ import {
     calculateDeadlineStatus,
     countBusinessDaysInclusive,
     getBrasiliaDate,
+    getNextBusinessDayAfter,
     isBusinessDay,
+    isDeadlineOverdue,
     STATUS_PRAZO
 } from '../src/modules/fornecimento/services/prazo.utils.js'
 
@@ -33,6 +35,32 @@ describe('calendario institucional e prazo', () => {
         expect(calculateDeadlineStatus({
             today: '2026-10-21',
             deadline: '2026-10-20'
+        })).toBe(STATUS_PRAZO.ATRASADA)
+    })
+
+    it('só marca atraso no próximo dia útil depois do prazo', () => {
+        expect(getNextBusinessDayAfter('2026-10-02')).toBe('2026-10-05')
+        expect(isDeadlineOverdue({
+            deadline: '2026-10-02',
+            today: '2026-10-03'
+        })).toBe(false)
+        expect(isDeadlineOverdue({
+            deadline: '2026-10-02',
+            today: '2026-10-05'
+        })).toBe(true)
+    })
+
+    it('pula fim de semana e feriado para iniciar o atraso', () => {
+        expect(getNextBusinessDayAfter('2026-10-09', ['2026-10-12'])).toBe('2026-10-13')
+        expect(calculateDeadlineStatus({
+            deadline: '2026-10-09',
+            today: '2026-10-12',
+            holidays: ['2026-10-12']
+        })).toBe(STATUS_PRAZO.PROXIMA_EXPIRACAO)
+        expect(calculateDeadlineStatus({
+            deadline: '2026-10-09',
+            today: '2026-10-13',
+            holidays: ['2026-10-12']
         })).toBe(STATUS_PRAZO.ATRASADA)
     })
 

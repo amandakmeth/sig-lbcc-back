@@ -15,6 +15,7 @@ import historicoPacientesRoutes from '../modules/historico_pacientes/routes/hist
 import fornecimentoRoutes from '../modules/fornecimento/routes/fornecimento.routes.js'
 import calendarioRoutes from '../modules/calendario/routes/calendario.routes.js'
 import notificacoesRoutes from '../modules/notificacoes/routes/notificacoes.routes.js'
+import operacaoRoutes from '../modules/operacao/routes/operacao.routes.js'
 
 
 const router = express.Router()
@@ -40,6 +41,7 @@ router.use('/historico-pacientes', historicoPacientesRoutes)
 router.use('/fornecimento', fornecimentoRoutes);
 router.use('/calendario/feriados', calendarioRoutes);
 router.use('/notificacoes', notificacoesRoutes);
+router.use('/operacao', operacaoRoutes);
 
 // Documentos (usa rotas próprias internas)
 

@@ -89,6 +89,25 @@ export function isBusinessDay(value, holidays = []) {
     return !normalizeHolidayDates(holidays).has(date)
 }
 
+export function getNextBusinessDayAfter(value, holidays = []) {
+    let cursor = addDays(value, 1)
+
+    while (cursor && !isBusinessDay(cursor, holidays)) {
+        cursor = addDays(cursor, 1)
+    }
+
+    return cursor
+}
+
+export function isDeadlineOverdue({ deadline, today, holidays = [] }) {
+    const deadlineDate = toDateOnly(deadline)
+    const todayDate = toDateOnly(today) || getBrasiliaDate()
+    if (!deadlineDate || !todayDate) return false
+
+    const firstOverdueDate = getNextBusinessDayAfter(deadlineDate, holidays)
+    return Boolean(firstOverdueDate && todayDate >= firstOverdueDate)
+}
+
 export function countBusinessDaysInclusive(start, end, holidays = []) {
     const startDate = toDateOnly(start)
     const endDate = toDateOnly(end)
@@ -111,7 +130,15 @@ export function calculateDeadlineStatus({ deadline, today, holidays = [] }) {
     const todayDate = toDateOnly(today) || getBrasiliaDate()
 
     if (!deadlineDate) return STATUS_PRAZO.NORMAL
-    if (deadlineDate < todayDate) return STATUS_PRAZO.ATRASADA
+    if (deadlineDate < todayDate) {
+        return isDeadlineOverdue({
+            deadline: deadlineDate,
+            today: todayDate,
+            holidays
+        })
+            ? STATUS_PRAZO.ATRASADA
+            : STATUS_PRAZO.PROXIMA_EXPIRACAO
+    }
 
     const daysRemaining = countBusinessDaysInclusive(
         todayDate,

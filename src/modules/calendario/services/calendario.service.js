@@ -1,16 +1,16 @@
-import supabase from '../../../config/supabase.js'
+import supabaseAdmin from '../../../config/supabaseAdmin.js'
 
 const CAMPOS = 'id, data, nome, ativo, criado_por, atualizado_por, created_at, updated_at'
 
 export async function listarFeriados() {
-    return await supabase
+    return await supabaseAdmin
         .from('calendario_feriados')
         .select(CAMPOS)
         .order('data', { ascending: true })
 }
 
 export async function buscarFeriado(id) {
-    return await supabase
+    return await supabaseAdmin
         .from('calendario_feriados')
         .select(CAMPOS)
         .eq('id', id)
@@ -18,7 +18,7 @@ export async function buscarFeriado(id) {
 }
 
 export async function inserirFeriado({ data, nome, usuarioId }) {
-    return await supabase
+    return await supabaseAdmin
         .from('calendario_feriados')
         .insert([{
             data,
@@ -40,7 +40,7 @@ export async function atualizarFeriado({ id, data, nome, usuarioId }) {
     if (data !== undefined) alteracoes.data = data
     if (nome !== undefined) alteracoes.nome = nome
 
-    return await supabase
+    return await supabaseAdmin
         .from('calendario_feriados')
         .update(alteracoes)
         .eq('id', id)
@@ -49,7 +49,7 @@ export async function atualizarFeriado({ id, data, nome, usuarioId }) {
 }
 
 export async function alterarStatusFeriado({ id, ativo, usuarioId }) {
-    return await supabase
+    return await supabaseAdmin
         .from('calendario_feriados')
         .update({
             ativo,
@@ -62,7 +62,7 @@ export async function alterarStatusFeriado({ id, ativo, usuarioId }) {
 }
 
 export async function listarDatasFeriadosAtivos() {
-    return await supabase
+    return await supabaseAdmin
         .from('calendario_feriados')
         .select('data')
         .eq('ativo', true)
