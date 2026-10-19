@@ -174,49 +174,52 @@ export const alterarStatusFornecedor =
 // =========================
 // VERIFICAR RELACIONAMENTOS
 // =========================
+
 export const verificarRelacionamentosFornecedorService =
     async (id) => {
 
-    const [
-        { count: propostas, error: propostasError },
-        { count: itens, error: itensError }
-    ] = await Promise.all([
-        supabase
-            .from('cotacao_propostas')
-            .select('*', {
-                count: 'exact',
-                head: true
-            })
-            .eq('fornecedor_id', id),
-        supabase
-            .from('cotacao_itens')
-            .select('*', {
-                count: 'exact',
-                head: true
-            })
-            .eq('fornecedor_id', id)
-    ])
+        const [
+            { count: propostas, error: propostasError },
+            { count: ordens, error: ordensError }
+        ] = await Promise.all([
+            supabase
+                .from('cotacao_propostas')
+                .select('*', { count: 'exact', head: true })
+                .eq('fornecedor_id', id),
 
-    if (propostasError) {
-        return { error: propostasError }
-    }
+            supabase
+                .from('ordens_fornecimento')
+                .select('*', { count: 'exact', head: true })
+                .eq('fornecedor_id', id)
+        ]);
 
-    if (itensError) {
-        return { error: itensError }
-    }
-
-    return {
-        data: {
-            possuiRelacionamentos:
-                propostas > 0 || itens > 0,
-
-            relacionamentos: {
-                propostas,
-                itens
-            }
+        if (propostasError) {
+            console.error(
+                'Erro ao consultar cotacao_propostas:',
+                propostasError
+            );
+            return { error: propostasError };
         }
-    }
-}
+
+        if (ordensError) {
+            console.error(
+                'Erro ao consultar ordens_fornecimento:',
+                ordensError
+            );
+            return { error: ordensError };
+        }
+
+        return {
+            data: {
+                possuiRelacionamentos: propostas > 0 || ordens > 0,
+                relacionamentos: {
+                    propostas,
+                    ordens
+                }
+            }
+        };
+    };
+
 
 // =========================
 // EXCLUIR FORNECEDOR

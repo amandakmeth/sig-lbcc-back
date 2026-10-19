@@ -16,6 +16,10 @@ describe('job de atraso', () => {
             data_previsao_entrega: '2026-10-02'
         })).toBe(false)
         expect(isEligibleForOverdue({
+            status: 'cancelada',
+            data_previsao_entrega: '2026-10-02'
+        })).toBe(false)
+        expect(isEligibleForOverdue({
             status: 'em_entrega',
             data_previsao_entrega: null
         })).toBe(false)

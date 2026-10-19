@@ -12,7 +12,8 @@ import {
     obterLembreteFornecedor,
     reenviarLembreteFornecedor,
     reenviarEmailOrdem,
-    baixarPdfOrdem
+    baixarPdfOrdem,
+    atualizarObservacoes
 } from '../controller/fornecimento.controller.js';
 
 import { authMiddleware } from '../../auth/middlewares/auth.middleware.js';
@@ -109,7 +110,7 @@ router.get(
  * /fornecimento/{id}/confirmar-recebimento:
  *   patch:
  *     summary: Confirma o recebimento da ordem de fornecimento
- *     description: Registra a confirmação de recebimento da Ordem de Fornecimento pelo fornecedor e altera seu status de enviada para em_entrega.
+ *     description: Permite que um gestor ou operador confirme manualmente o recebimento da Ordem de Fornecimento. A ordem deve estar com status enviada e, após a confirmação, passa para em_entrega.
  *     tags: [Fornecimento]
  *     security:
  *       - bearerAuth: []
@@ -121,6 +122,21 @@ router.get(
  *         schema:
  *           type: string
  *           format: uuid
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               canal_confirmacao:
+ *                 type: string
+ *                 enum:
+ *                   - telefone
+ *                   - whatsapp
+ *                   - outro
+ *                 description: Canal utilizado para confirmar o recebimento. Campo opcional.
+ *                 example: whatsapp
  *     responses:
  *       200:
  *         description: Recebimento confirmado com sucesso
@@ -135,6 +151,51 @@ router.get(
 router.patch(
     '/:id/confirmar-recebimento',
     confirmarRecebimento
+);
+
+/**
+ * @swagger
+ * /fornecimento/{id}/observacoes:
+ *   patch:
+ *     summary: Atualiza as observações de uma ordem de fornecimento
+ *     description: Permite que um gestor altere somente as observações da OF, mantendo o histórico da alteração.
+ *     tags: [Fornecimento]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [observacoes]
+ *             additionalProperties: false
+ *             properties:
+ *               observacoes:
+ *                 type: string
+ *                 nullable: true
+ *     responses:
+ *       200:
+ *         description: Observações atualizadas
+ *       400:
+ *         description: Dados inválidos
+ *       403:
+ *         description: Usuário sem permissão
+ *       404:
+ *         description: Ordem não encontrada
+ *       500:
+ *         description: Erro interno
+ */
+router.patch(
+    '/:id/observacoes',
+    atualizarObservacoes
 );
 
 router.patch(

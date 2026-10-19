@@ -13,7 +13,7 @@ describe('Auth - Regras de Negócio', () => {
             .post('/auth/login')
             .send({
                 email: 'admin@email.com',
-                password: '123456'
+                password: '1234567'
             })
 
         expect(res.statusCode).toBe(200)

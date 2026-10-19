@@ -128,15 +128,22 @@ export const atualizarUsuario = async (id, dados) => {
 // =========================
 // ATIVAR / INATIVAR USUÁRIO
 // =========================
-export const alterarStatusUsuario = async (
-    id,
-    status
-) => {
+
+export const alterarStatusUsuario = async (id) => {
+    const { data: usuario, error: erroBusca } = await supabase
+        .from('usuarios')
+        .select('ativo')
+        .eq('id', id)
+        .single()
+
+    if (erroBusca) {
+        return { data: null, error: erroBusca }
+    }
 
     const { data, error } = await supabase
         .from('usuarios')
         .update({
-            status,
+            ativo: !usuario.ativo,
             updated_at: new Date()
         })
         .eq('id', id)
@@ -144,6 +151,7 @@ export const alterarStatusUsuario = async (
 
     return { data, error }
 }
+
 
 // =========================
 // VERIFICAR RELACIONAMENTOS

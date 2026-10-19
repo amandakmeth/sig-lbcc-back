@@ -101,6 +101,7 @@ router.get('/:id', getHistoricoById)
  *                   - ATENDIMENTO_REGISTRADO
  *                   - ATENDIMENTO_REMOVIDO
  *                   - OF_PRAZO_PROXIMIDADE_ATINGIDA
+ *                   - OF_RECEBIMENTO_CONFIRMADO
  *               descricao:
  *                 type: string
  *               referencia_id:

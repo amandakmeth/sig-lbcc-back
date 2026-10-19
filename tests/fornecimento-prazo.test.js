@@ -1,8 +1,11 @@
 import { jest } from '@jest/globals'
 
-const cotacao = {
+
+const cotacaoBase = {
     id: 'cotacao-1',
     status: 'finalizada',
+    ativo: true,
+    data_validade: '2026-10-30',
     paciente_id: 'paciente-1'
 }
 
@@ -48,39 +51,79 @@ function createBuilder(result) {
     return builder
 }
 
-const ordensExistentesBuilder = createBuilder({ data: [], error: null })
-const numeroBuilder = createBuilder({ data: null, error: null })
-const ordemInsertBuilder = createBuilder({
-    data: {
-        id: 'ordem-1',
-        numero: 'OF-2026-0001',
-        status: 'rascunho',
-        data_previsao_entrega: '2026-10-21',
-        prazo_ciclo: 1,
-        status_prazo: 'normal'
-    },
-    error: null
-})
+let builders
+let ordemInsertBuilder
 
-const builders = {
-    cotacoes: [createBuilder({ data: cotacao, error: null })],
-    cotacao_proposta_itens: [createBuilder({ data: vencedores, error: null })],
-    ordens_fornecimento: [
-        ordensExistentesBuilder,
-        numeroBuilder,
-        ordemInsertBuilder
-    ],
-    ordem_fornecimento_itens: [createBuilder({
-        data: [{ id: 'ordem-item-1' }],
+function configurarBuilders(cotacaoResultado = {
+    data: cotacaoBase,
+    error: null
+}) {
+    const ordensExistentesBuilder = createBuilder({
+        data: [],
         error: null
-    })]
+    })
+
+    const numeroBuilder = createBuilder({
+        data: null,
+        error: null
+    })
+
+    ordemInsertBuilder = createBuilder({
+        data: {
+            id: 'ordem-1',
+            numero: 'OF-2026-0001',
+            status: 'rascunho',
+            data_previsao_entrega: null,
+            prazo_ciclo: 1,
+            status_prazo: 'normal'
+        },
+        error: null
+    })
+
+    builders = {
+        cotacoes: [createBuilder(cotacaoResultado)],
+        cotacao_proposta_itens: [
+            createBuilder({
+                data: vencedores,
+                error: null
+            })
+        ],
+        ordens_fornecimento: [
+            ordensExistentesBuilder,
+            numeroBuilder,
+            ordemInsertBuilder
+        ],
+        ordem_fornecimento_itens: [
+            createBuilder({
+                data: [{ id: 'ordem-item-1' }],
+                error: null
+            })
+        ]
+    }
 }
 
 const db = {
-    from: jest.fn((table) => builders[table].shift())
+    from: jest.fn((table) => {
+        const builder = builders[table]?.shift()
+
+        if (!builder) {
+            throw new Error(`Mock não configurado para a tabela: ${table}`)
+        }
+
+        return builder
+    })
 }
 
-jest.unstable_mockModule('../src/config/supabase.js', () => ({ default: db }))
+
+jest.unstable_mockModule('../src/config/supabase.js', () => ({
+    default: db
+}))
+
+jest.unstable_mockModule('../src/config/supabaseAdmin.js', () => ({
+    default: {
+        rpc: jest.fn()
+    }
+}))
 jest.unstable_mockModule('../src/modules/calendario/services/calendario.service.js', () => ({
     listarDatasFeriadosAtivos: jest.fn(async () => ({
         data: [{ data: '2026-10-12' }],
@@ -106,7 +149,7 @@ describe('geração da ordem de fornecimento', () => {
         jest.useRealTimers()
     })
 
-    it('inicia a ordem com 7 dias úteis, ignorando fins de semana e feriados ativos', async () => {
+    it('cria a ordem sem prazo definido antes do envio bem-sucedido do e-mail', async () => {
         const resultado = await gerarOrdensDeFornecimento({
             cotacaoId: 'cotacao-1',
             criadoPor: 'usuario-1'
@@ -114,9 +157,69 @@ describe('geração da ordem de fornecimento', () => {
 
         expect(resultado.error).toBeNull()
         expect(ordemInsertBuilder.inserted[0]).toEqual(expect.objectContaining({
-            data_previsao_entrega: '2026-10-21',
+            data_previsao_entrega: null,
             status_prazo: 'normal'
         }))
-        expect(resultado.data[0].data_previsao_entrega).toBe('2026-10-21')
+        expect(resultado.data[0].data_previsao_entrega).toBeNull()
     })
+
+    beforeEach(() => {
+    configurarBuilders()
+    })
+
+
+it('recusa gerar OF para cotação inativa', async () => {
+    configurarBuilders({
+        data: {
+            ...cotacaoBase,
+            ativo: false
+        },
+        error: null
+    })
+
+    const resultado = await gerarOrdensDeFornecimento({
+        cotacaoId: 'cotacao-1',
+        criadoPor: 'usuario-1'
+    })
+
+    expect(resultado.error.message).toMatch(/inativa/i)
+    expect(ordemInsertBuilder.insert).not.toHaveBeenCalled()
+})
+
+it('recusa gerar OF para cotação vencida', async () => {
+    configurarBuilders({
+        data: {
+            ...cotacaoBase,
+            data_validade: '2026-10-08'
+        },
+        error: null
+    })
+
+    const resultado = await gerarOrdensDeFornecimento({
+        cotacaoId: 'cotacao-1',
+        criadoPor: 'usuario-1'
+    })
+
+    expect(resultado.error.message).toMatch(/vencida/i)
+    expect(ordemInsertBuilder.insert).not.toHaveBeenCalled()
+})
+
+it('recusa gerar OF sem paciente associado', async () => {
+    configurarBuilders({
+        data: {
+            ...cotacaoBase,
+            paciente_id: null
+        },
+        error: null
+    })
+
+    const resultado = await gerarOrdensDeFornecimento({
+        cotacaoId: 'cotacao-1',
+        criadoPor: 'usuario-1'
+    })
+
+    expect(resultado.error.message).toMatch(/paciente/i)
+    expect(ordemInsertBuilder.insert).not.toHaveBeenCalled()
+})
+
 })

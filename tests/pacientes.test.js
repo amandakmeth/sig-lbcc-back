@@ -11,7 +11,7 @@ beforeAll(async () => {
         .post('/auth/login')
         .send({
             email: 'admin@email.com',
-            password: '123456'
+            password: '1234567'
         })
 
     tokenGestor = gestor.body.access_token

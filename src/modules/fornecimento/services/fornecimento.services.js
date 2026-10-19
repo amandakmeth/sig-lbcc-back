@@ -11,6 +11,7 @@ import {
   registrarAuditoria,
   registrarOcorrencia,
 } from "../../historico_pacientes/services/auditoria.service.js";
+import supabaseAdmin from '../../../config/supabaseAdmin.js';
 
 const PRAZO_PADRAO_DIAS_UTEIS = 7;
 
@@ -240,7 +241,6 @@ async function registrarAlteracaoDePrazo({
 
     if (ocorrencia.error) return ocorrencia.error;
   }
-
   return null;
 }
 
@@ -251,13 +251,13 @@ async function registrarAlteracaoDePrazo({
 export async function gerarOrdensDeFornecimento({ cotacaoId, criadoPor }) {
   const { data: cotacao, error: cotacaoError } = await supabase
     .from("cotacoes")
-    .select(
-      `
-            id,
-            status,
-            paciente_id
-        `,
-    )
+    .select(`
+      id,
+      status,
+      ativo,
+      data_validade,
+      paciente_id
+    `)
     .eq("id", cotacaoId)
     .single();
 
@@ -270,6 +270,8 @@ export async function gerarOrdensDeFornecimento({ cotacaoId, criadoPor }) {
     };
   }
 
+
+
   if (cotacao.status !== "finalizada") {
     return {
       data: null,
@@ -278,6 +280,51 @@ export async function gerarOrdensDeFornecimento({ cotacaoId, criadoPor }) {
       },
     };
   }
+
+
+    if (!cotacao.ativo) {
+    return {
+    data: null,
+    error: {
+      message: "Não é possível gerar ordens para uma cotação inativa",
+    },
+    };
+    }
+
+    if (!cotacao.paciente_id) {
+    return {
+    data: null,
+    error: {
+      message: "Não é possível gerar ordens sem paciente associado à cotação",
+    },
+    };
+    }
+
+    if (cotacao.data_validade) {
+    const hojePartes = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    }).formatToParts(new Date());
+
+    const hoje = Object.fromEntries(
+    hojePartes.map(({ type, value }) => [type, value]),
+    );
+
+    const hojeData = `${hoje.year}-${hoje.month}-${hoje.day}`;
+    const validadeData = String(cotacao.data_validade).slice(0, 10);
+
+    if (validadeData < hojeData) {
+    return {
+      data: null,
+      error: {
+        message: "Não é possível gerar ordens para uma cotação vencida",
+      },
+    };
+    }
+    }
+
 
   const { data: vencedores, error: vencedoresError } = await supabase
     .from("cotacao_proposta_itens")
@@ -374,19 +421,9 @@ export async function gerarOrdensDeFornecimento({ cotacaoId, criadoPor }) {
     };
   }
 
-  let feriados;
-  try {
-    feriados = await obterFeriadosAtivos();
-  } catch (error) {
-    return { data: null, error };
-  }
-
-  const dataBasePrazo = getBrasiliaDate();
-
-  for (const grupo of gruposNovos) {
+    for (const grupo of gruposNovos) {
     grupo.prazoDiasUteis = PRAZO_PADRAO_DIAS_UTEIS;
-
-    grupo.dataLimite = addBusinessDays(dataBasePrazo, grupo.prazoDiasUteis, feriados);
+    grupo.dataLimite = null;
   }
 
   const ordensCriadas = [];
@@ -409,13 +446,9 @@ export async function gerarOrdensDeFornecimento({ cotacaoId, criadoPor }) {
           fornecedor_id: grupo.fornecedor_id,
           paciente_id: cotacao.paciente_id,
           status: "rascunho",
-          data_previsao_entrega: grupo.dataLimite,
+          data_previsao_entrega: null,
           prazo_ciclo: 1,
-          status_prazo: calculateDeadlineStatus({
-            deadline: grupo.dataLimite,
-            today: dataBasePrazo,
-            holidays: feriados,
-          }),
+          status_prazo: STATUS_PRAZO.NORMAL,
           valor_total: valorTotal,
           criado_por: criadoPor || null,
         },
@@ -548,20 +581,31 @@ export async function buscarOrdemDeFornecimento(id) {
     .from("ordens_fornecimento")
     .select(ORDEM_SELECT)
     .eq("id", id)
-    .single();
+    .maybeSingle();
 
-  if (error || !data) {
+  if (error) {
     return {
       data: null,
       error: {
-        message: "Ordem de fornecimento não encontrada",
-      },
+        message: "Erro ao buscar ordem de fornecimento",
+        details: error.message,
+        code: error.code
+      }
+    };
+  }
+
+  if (!data) {
+    return {
+      data: null,
+      error: {
+        message: "Ordem de fornecimento não encontrada"
+      }
     };
   }
 
   return {
     data: normalizarOrdem(data),
-    error: null,
+    error: null
   };
 }
 
@@ -569,75 +613,42 @@ export async function buscarOrdemDeFornecimento(id) {
 // CONFIRMAR RECEBIMENTO
 // =========================
 
-export async function confirmarRecebimentoOrdemDeFornecimento({ id, atualizadoPor }) {
-  // =========================
-  // BUSCAR ORDEM
-  // =========================
 
-  const { data: ordem, error: buscaError } = await supabase
-    .from("ordens_fornecimento")
-    .select(
-      `
-            id,
-            numero,
-            paciente_id,
-            status
-        `,
-    )
-    .eq("id", id)
-    .single();
 
-  if (buscaError || !ordem) {
-    return {
-      data: null,
-      error: {
-        message: "Ordem de fornecimento não encontrada",
-      },
-    };
+export async function confirmarRecebimentoOrdemDeFornecimento({
+  id,
+  atualizadoPor,
+  canalConfirmacao = null
+}) {
+  const { data: resultado, error } = await supabaseAdmin.rpc(
+    'confirmar_recebimento_ordem',
+    {
+      p_id: id,
+      p_atualizado_por: atualizadoPor || null,
+      p_canal_confirmacao: canalConfirmacao
+    }
+  );
+
+  if (error) {
+    return { data: null, error };
   }
 
-  // =========================
-  // VALIDAR STATUS
-  // =========================
-
-  if (ordem.status !== "enviada") {
+  if (!resultado?.ok) {
     return {
       data: null,
       error: {
         message:
-          "A confirmação de recebimento só pode ser realizada para uma ordem de fornecimento com status enviada",
-      },
+          resultado?.message ||
+          'Não foi possível confirmar o recebimento da ordem de fornecimento'
+      }
     };
   }
 
-  // =========================
-  // ATUALIZAR ORDEM
-  // =========================
-
-  const { data, error } = await supabase
-    .from("ordens_fornecimento")
-    .update({
-      status: "em_entrega",
-      recebido_em: new Date().toISOString(),
-      recebido_por: atualizadoPor || null,
-      atualizado_por: atualizadoPor || null,
-    })
-    .eq("id", id)
-    .select(ORDEM_SELECT)
-    .single();
-
-  if (error) {
-    return {
-      data: null,
-      error,
-    };
-  }
-
-  return {
-    data: normalizarOrdem(data),
-    error: null,
-  };
+  // Recupera a ordem com os relacionamentos esperados pela API.
+  return await buscarOrdemDeFornecimento(id);
 }
+
+
 
 export async function finalizarOrdemDeFornecimento({ id, atualizadoPor }) {
   const { data: ordem, error: buscaError } = await supabase
@@ -911,5 +922,41 @@ export async function atualizarStatusPrazoOrdem({ id, statusPrazo, usuarioId }) 
   });
 
   if (auditoriaError) return { data: null, error: auditoriaError };
+  return await buscarOrdemDeFornecimento(id);
+}
+
+// =========================
+// ATUALIZAR OBSERVAÇÕES DA OF
+// =========================
+
+export async function atualizarObservacoesOrdemDeFornecimento({
+  id,
+  observacoes,
+  atualizadoPor
+}) {
+  const { data: resultado, error } = await supabaseAdmin.rpc(
+    'atualizar_observacoes_ordem_fornecimento',
+    {
+      p_id: id,
+      p_observacoes: observacoes,
+      p_usuario_id: atualizadoPor
+    }
+  );
+
+  if (error) {
+    return { data: null, error };
+  }
+
+  if (!resultado?.ok) {
+    return {
+      data: null,
+      error: {
+        message:
+          resultado?.message ||
+          'Não foi possível atualizar as observações da ordem de fornecimento'
+      }
+    };
+  }
+
   return await buscarOrdemDeFornecimento(id);
 }
