@@ -646,7 +646,7 @@ async function carregarLinhaOrcamento({
         error: cotacaoError
     } = await supabase
         .from('cotacoes')
-        .select('id, ativo, status')
+        .select('id, ativo, status, data_validade, paciente_id')
         .eq('id', cotacaoId)
         .single();
 
@@ -657,6 +657,40 @@ async function carregarLinhaOrcamento({
                 message: 'Cotação não encontrada'
             }
         };
+    }
+
+        if (!cotacao.paciente_id) {
+        return {
+            data: null,
+            error: {
+                message: 'Não é possível definir vencedor sem paciente associado à cotação'
+            }
+        };
+    }
+
+        if (cotacao.data_validade) {
+        const hojePartes = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'America/Sao_Paulo',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        }).formatToParts(new Date());
+
+        const hoje = Object.fromEntries(
+            hojePartes.map(({ type, value }) => [type, value])
+        );
+
+        const hojeData = `${hoje.year}-${hoje.month}-${hoje.day}`;
+        const validadeData = String(cotacao.data_validade).slice(0, 10);
+
+        if (validadeData < hojeData) {
+            return {
+                data: null,
+                error: {
+                    message: 'Não é possível definir vencedor para uma cotação vencida'
+                }
+            };
+        }
     }
 
     if (!cotacao.ativo) {
@@ -739,6 +773,15 @@ async function carregarLinhaOrcamento({
             error: {
                 message:
                     'O orçamento informado não pertence ao item'
+            }
+        };
+    }
+
+        if (!envelope.fornecedor_id) {
+        return {
+            data: null,
+            error: {
+                message: 'Não é possível definir vencedor sem fornecedor associado ao orçamento'
             }
         };
     }

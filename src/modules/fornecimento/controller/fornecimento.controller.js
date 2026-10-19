@@ -6,7 +6,8 @@ import {
     listarGestoresResponsaveis,
     atualizarPrazoOrdem,
     atualizarStatusPrazoOrdem,
-    finalizarOrdemDeFornecimento
+    finalizarOrdemDeFornecimento,
+    atualizarObservacoesOrdemDeFornecimento
 } from '../services/fornecimento.services.js';
 import {
     buscarLembreteFornecedor,
@@ -152,18 +153,30 @@ export async function buscarOrdem(req, res) {
 export async function confirmarRecebimento(req, res) {
     try {
         if (!['gestor', 'operador'].includes(req.user?.perfil)) {
-            return res.status(403).json({ message: 'Apenas operador ou gestor pode confirmar o recebimento' });
+            return res.status(403).json({
+                message: 'Apenas operador ou gestor pode confirmar o recebimento'
+            });
         }
 
         const { id } = req.params;
+        const canalConfirmacao = req.body?.canal_confirmacao;
+        const canaisPermitidos = ['telefone', 'whatsapp', 'outro'];
 
-        const {
-            data,
-            error
-        } = await confirmarRecebimentoOrdemDeFornecimento({
-            id,
-            atualizadoPor: req.user?.id || null
-        });
+        if (
+            canalConfirmacao !== undefined &&
+            !canaisPermitidos.includes(canalConfirmacao)
+        ) {
+            return res.status(400).json({
+                message: 'Canal de confirmação inválido. Utilize telefone, whatsapp ou outro.'
+            });
+        }
+
+        const { data, error } =
+            await confirmarRecebimentoOrdemDeFornecimento({
+                id,
+                atualizadoPor: req.user?.id || null,
+                canalConfirmacao: canalConfirmacao ?? null
+            });
 
         if (error) {
             return res.status(400).json({
@@ -173,28 +186,8 @@ export async function confirmarRecebimento(req, res) {
             });
         }
 
-
-        // =========================
-        // REGISTRAR AUDITORIA
-        // =========================
-
-        await registrarOcorrencia({
-            paciente_id: data.paciente_id,
-            usuario_id: req.user?.id || null,
-            tipo_evento: 'OF_RECEBIMENTO_CONFIRMADO',
-            descricao:
-                `Recebimento da Ordem de Fornecimento ${data.numero} confirmado pelo fornecedor`,
-            referencia_id: data.id
-        });
-
-
-        // =========================
-        // RETORNO
-        // =========================
-
         return res.status(200).json({
-            message:
-                'Recebimento da ordem de fornecimento confirmado com sucesso',
+            message: 'Recebimento da ordem de fornecimento confirmado com sucesso',
             data
         });
 
@@ -205,8 +198,66 @@ export async function confirmarRecebimento(req, res) {
         );
 
         return res.status(500).json({
-            message:
-                'Erro interno ao confirmar recebimento da ordem de fornecimento'
+            message: 'Erro interno ao confirmar recebimento da ordem de fornecimento'
+        });
+    }
+}
+export async function atualizarObservacoes(req, res) {
+    if (req.user?.perfil !== 'gestor') {
+        return res.status(403).json({
+            message: 'Apenas gestor pode editar observações da ordem de fornecimento'
+        });
+    }
+
+    const body = req.body;
+
+    if (
+        !body ||
+        typeof body !== 'object' ||
+        Array.isArray(body) ||
+        Object.keys(body).length !== 1 ||
+        !Object.prototype.hasOwnProperty.call(body, 'observacoes')
+    ) {
+        return res.status(400).json({
+            message: 'Envie somente o campo observacoes'
+        });
+    }
+
+    if (
+        body.observacoes !== null &&
+        typeof body.observacoes !== 'string'
+    ) {
+        return res.status(400).json({
+            message: 'O campo observacoes deve ser um texto ou null'
+        });
+    }
+
+    try {
+        const resultado = await atualizarObservacoesOrdemDeFornecimento({
+            id: req.params.id,
+            observacoes: body.observacoes,
+            atualizadoPor: req.user.id
+        });
+
+        if (resultado.error) {
+            const naoEncontrada = /não encontrada|nao encontrada/i.test(
+                resultado.error.message || ''
+            );
+
+            return res.status(naoEncontrada ? 404 : 400).json({
+                message: resultado.error.message
+            });
+        }
+
+        return res.status(200).json({
+            message: 'Observações da ordem de fornecimento atualizadas com sucesso',
+            data: resultado.data
+        });
+    } catch (error) {
+        console.error('Erro ao atualizar observações da ordem de fornecimento:', error);
+
+        return res.status(500).json({
+            message: 'Erro interno ao atualizar observações da ordem de fornecimento'
         });
     }
 }

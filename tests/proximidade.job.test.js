@@ -12,6 +12,7 @@ describe('job de proximidade', () => {
         expect(isEligibleOrder({ status: 'enviada', data_previsao_entrega: '2026-10-05' })).toBe(true)
         expect(isEligibleOrder({ status: 'em_entrega', data_previsao_entrega: '2026-10-05' })).toBe(true)
         expect(isEligibleOrder({ status: 'finalizada', data_previsao_entrega: '2026-10-05' })).toBe(false)
+        expect(isEligibleOrder({ status: 'cancelada', data_previsao_entrega: '2026-10-05' })).toBe(false)
         expect(isEligibleOrder({ status: 'enviada', data_previsao_entrega: 'data-invalida' })).toBe(false)
     })
 

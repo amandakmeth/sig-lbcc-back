@@ -9,6 +9,7 @@ const service = {
     listarGestoresResponsaveis: jest.fn(),
     atualizarPrazoOrdem: jest.fn(),
     atualizarStatusPrazoOrdem: jest.fn(),
+    atualizarObservacoesOrdemDeFornecimento: jest.fn(),
     finalizarOrdemDeFornecimento: jest.fn()
 }
 

@@ -8,6 +8,14 @@ import {
     nomeArquivoPdf
 } from './ordem-fornecimento-pdf.service.js'
 
+import {
+    addBusinessDays,
+    calculateDeadlineStatus,
+    getBrasiliaDate
+} from './prazo.utils.js'
+
+import { listarDatasFeriadosAtivos } from '../../calendario/services/calendario.service.js'
+
 export const ORDEM_ENVIO_STATUS = Object.freeze({
     NAO_ENVIADO: 'nao_enviado',
     PENDENTE: 'pendente',
@@ -506,6 +514,34 @@ export async function processarEnvioOrdemDeFornecimento({
         return { data: null, error }
     }
 
+    let feriados = []
+
+    if (!ordem.data_previsao_entrega) {
+        try {
+            const resultadoFeriados = await listarDatasFeriadosAtivos();
+
+            if (resultadoFeriados.error) {
+                throw resultadoFeriados.error;
+            }
+
+            feriados = resultadoFeriados.data || [];
+        } catch (error) {
+            await db.from('ordens_fornecimento_envios')
+                .update({
+                    status: 'pendente',
+                    erro: null,
+                    iniciado_em: null
+                })
+                .eq('id', envio.id);
+
+            await atualizarOrdemEnvio(ordemId, {
+                status_envio: ORDEM_ENVIO_STATUS.PENDENTE
+            }, db);
+
+            return { data: null, error };
+        }
+    }
+
     try {
         const resultado = await adapter.send({
             to: email,
@@ -542,6 +578,24 @@ export async function processarEnvioOrdemDeFornecimento({
             email_envio_ultimo_sucesso_em: enviadoEm,
             email_envio_proxima_tentativa: null
         }
+        if (!ordem.data_previsao_entrega) {
+            const dataBasePrazo = getBrasiliaDate(new Date(enviadoEm))
+
+            const dataLimite = addBusinessDays(
+                dataBasePrazo,
+                7,
+                feriados
+            )
+
+            dadosOrdem.data_previsao_entrega = dataLimite
+            dadosOrdem.status_prazo = calculateDeadlineStatus({
+                deadline: dataLimite,
+                today: dataBasePrazo,
+                holidays: feriados
+            })
+            dadosOrdem.prazo_atualizado_em = enviadoEm
+        }
+
         if (ordem.status === 'rascunho') {
             dadosOrdem.status = 'enviada'
             dadosOrdem.data_envio = ordem.data_envio || enviadoEm
@@ -550,7 +604,7 @@ export async function processarEnvioOrdemDeFornecimento({
         const ordemAtualizada = await db.from('ordens_fornecimento')
             .update(dadosOrdem)
             .eq('id', ordemId)
-            .select('id, status, status_envio, data_envio')
+            .select('id, status, status_envio, data_envio, data_previsao_entrega, status_prazo')
             .maybeSingle()
 
         if (ordemAtualizada.error) return { data: null, error: ordemAtualizada.error }

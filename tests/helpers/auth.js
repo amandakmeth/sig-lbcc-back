@@ -6,7 +6,7 @@ export const getTokens = async () => {
         .post('/auth/login')
         .send({
             email: 'admin@email.com',
-            password: '123456'
+            password: '1234567'
         })
 
     const operador = await request(app)
