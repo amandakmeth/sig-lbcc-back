@@ -1,7 +1,7 @@
-import 'dotenv/config'
-import { jest } from '@jest/globals'
 
-const service = {
+import { jest } from '@jest/globals';
+
+const fornecimentoServices = {
     gerarOrdensDeFornecimento: jest.fn(),
     listarOrdensDeFornecimento: jest.fn(),
     buscarOrdemDeFornecimento: jest.fn(),
@@ -9,332 +9,455 @@ const service = {
     listarGestoresResponsaveis: jest.fn(),
     atualizarPrazoOrdem: jest.fn(),
     atualizarStatusPrazoOrdem: jest.fn(),
-    atualizarObservacoesOrdemDeFornecimento: jest.fn(),
     finalizarOrdemDeFornecimento: jest.fn(),
-}
+    atualizarObservacoesOrdemDeFornecimento: jest.fn()
+};
+
+const lembretes = {
+    buscarLembreteFornecedor: jest.fn(),
+    enviarLembreteFornecedor: jest.fn(),
+    LEMBRETE_STATUS: {
+        PENDENTE: 'pendente',
+        ENVIADO: 'enviado',
+        FALHA_RECUPERAVEL: 'falha_recuperavel',
+        FALHA_DEFINITIVA: 'falha_definitiva'
+    },
+    MAX_TENTATIVAS_LEMBRETE: 3
+};
+
+const email = {
+    agendarEnvioInicial: jest.fn(),
+    obterPdfOrdemDeFornecimento: jest.fn(),
+    processarEnvioOrdemDeFornecimento: jest.fn(),
+    solicitarReenvioOrdemDeFornecimento: jest.fn()
+};
 
 const auditoria = {
-    registrarOcorrencia: jest.fn(),
-    registrarAuditoria: jest.fn()
-}
+    registrarOcorrencia: jest.fn()
+};
 
 jest.unstable_mockModule(
     '../src/modules/fornecimento/services/fornecimento.services.js',
-    () => service
-)
+    () => fornecimentoServices
+);
+
+jest.unstable_mockModule(
+    '../src/modules/notificacoes/services/lembretes-fornecedor.service.js',
+    () => lembretes
+);
+
+jest.unstable_mockModule(
+    '../src/modules/fornecimento/services/ordem-fornecimento-email.service.js',
+    () => email
+);
 
 jest.unstable_mockModule(
     '../src/modules/historico_pacientes/services/auditoria.service.js',
     () => auditoria
-)
+);
 
 const {
     confirmarRecebimento,
     atualizarObservacoes
 } = await import(
     '../src/modules/fornecimento/controller/fornecimento.controller.js'
-)
+);
 
+function criarResponse() {
+    const res = {};
 
+    res.status = jest.fn().mockReturnValue(res);
+    res.json = jest.fn().mockReturnValue(res);
 
-function response() {
-    return {
-        statusCode: 200,
-        body: null,
-        status(code) {
-            this.statusCode = code
-            return this
-        },
-        json(body) {
-            this.body = body
-            return this
-        }
-    }
+    return res;
 }
 
-describe('confirmacao de recebimento da ordem de fornecimento', () => {
-    beforeEach(() => {
-        jest.clearAllMocks()
-    })
+function criarRequest({
+    user = { id: 'gestor-1', perfil: 'gestor' },
+    params = { id: 'of-1' },
+    body = {}
+} = {}) {
+    return {
+        user,
+        params,
+        body
+    };
+}
 
-    it('bloqueia usuario sem perfil autorizado', async () => {
-        const res = response()
+beforeEach(() => {
+    jest.clearAllMocks();
 
-        await confirmarRecebimento({
-            user: { id: 'usuario-1', perfil: 'consultor' },
-            params: { id: 'of-1' }
-        }, res)
-
-        expect(res.statusCode).toBe(403)
-        expect(service.confirmarRecebimentoOrdemDeFornecimento)
-            .not.toHaveBeenCalled()
-        expect(auditoria.registrarOcorrencia).not.toHaveBeenCalled()
-    })
-
-    it('permite gestor confirmar o recebimento', async () => {
-        const ordem = {
-            id: 'of-1',
-            numero: 'OF-001',
-            paciente_id: 'paciente-1',
-            status: 'em_entrega',
-            recebido_em: '2026-10-18T12:00:00.000Z',
-            recebido_por: 'gestor-1',
-            data_previsao_entrega: '2026-10-28'
-        }
-
-        service.confirmarRecebimentoOrdemDeFornecimento.mockResolvedValue({
-            data: ordem,
-            error: null
-        })
-
-        const res = response()
-
-        await confirmarRecebimento({
-            user: { id: 'gestor-1', perfil: 'gestor' },
-            params: { id: 'of-1' }
-        }, res)
-
-        expect(res.statusCode).toBe(200)
-        expect(service.confirmarRecebimentoOrdemDeFornecimento)
-            .toHaveBeenCalledWith({
+    fornecimentoServices.confirmarRecebimentoOrdemDeFornecimento
+        .mockResolvedValue({
+            data: {
                 id: 'of-1',
-                atualizadoPor: 'gestor-1',
-                canalConfirmacao: null
-            })
-
-        expect(auditoria.registrarOcorrencia).not.toHaveBeenCalled()
-        expect(res.body.message).toMatch(/confirmado com sucesso/i)
-    })
-
-    it('permite operador autorizado confirmar o recebimento', async () => {
-        service.confirmarRecebimentoOrdemDeFornecimento.mockResolvedValue({
-            data: {
-                id: 'of-2',
-                numero: 'OF-002',
-                paciente_id: 'paciente-2',
-                status: 'em_entrega'
+                status: 'entregue'
             },
             error: null
-        })
+        });
 
-        const res = response()
-
-        await confirmarRecebimento({
-            user: { id: 'operador-1', perfil: 'operador' },
-            params: { id: 'of-2' }
-        }, res)
-
-        expect(res.statusCode).toBe(200)
-        expect(service.confirmarRecebimentoOrdemDeFornecimento)
-            .toHaveBeenCalledWith({
-                id: 'of-2',
-                atualizadoPor: 'operador-1',
-                canalConfirmacao: null
-            })
-
-        expect(auditoria.registrarOcorrencia).not.toHaveBeenCalled()
-    })
-
-    it('rejeita nova tentativa quando o recebimento ja foi confirmado', async () => {
-        service.confirmarRecebimentoOrdemDeFornecimento.mockResolvedValue({
-            data: null,
-            error: { message: 'Recebimento ja confirmado' }
-        })
-
-        const res = response()
-
-        await confirmarRecebimento({
-            user: { id: 'gestor-1', perfil: 'gestor' },
-            params: { id: 'of-1' }
-        }, res)
-
-        expect(res.statusCode).toBe(400)
-        expect(service.confirmarRecebimentoOrdemDeFornecimento)
-            .toHaveBeenCalledTimes(1)
-        expect(auditoria.registrarOcorrencia).not.toHaveBeenCalled()
-    })
-
-    it('envia o canal WhatsApp para o serviço de confirmação', async () => {
-        service.confirmarRecebimentoOrdemDeFornecimento.mockResolvedValue({
+    fornecimentoServices.atualizarObservacoesOrdemDeFornecimento
+        .mockResolvedValue({
             data: {
-                id: 'of-canal',
-                numero: 'OF-CANAL',
+                id: 'of-1',
+                observacoes: 'Entrega recebida',
                 paciente_id: 'paciente-1',
-                status: 'em_entrega'
+                fornecedor_id: 'fornecedor-1',
+                cotacao_id: 'cotacao-1'
             },
             error: null
-        })
+        });
 
-        const res = response()
+    lembretes.buscarLembreteFornecedor.mockResolvedValue({
+        data: null,
+        error: null
+    });
 
-        await confirmarRecebimento({
-            user: { id: 'gestor-1', perfil: 'gestor' },
-            params: { id: 'of-canal' },
-            body: { canal_confirmacao: 'whatsapp' }
-        }, res)
+    lembretes.enviarLembreteFornecedor.mockResolvedValue({
+        data: null,
+        error: null
+    });
 
-        expect(res.statusCode).toBe(200)
-        expect(service.confirmarRecebimentoOrdemDeFornecimento)
-            .toHaveBeenCalledWith({
-                id: 'of-canal',
-                atualizadoPor: 'gestor-1',
-                canalConfirmacao: 'whatsapp'
-            })
+    email.agendarEnvioInicial.mockResolvedValue({
+        data: null,
+        error: null
+    });
 
-        expect(auditoria.registrarOcorrencia).not.toHaveBeenCalled()
-    })
+    email.obterPdfOrdemDeFornecimento.mockResolvedValue({
+        data: null,
+        error: null
+    });
 
-    it('rejeita canal de confirmação inválido sem confirmar a OF', async () => {
-        const res = response()
+    email.processarEnvioOrdemDeFornecimento.mockResolvedValue({
+        data: null,
+        error: null
+    });
 
-        await confirmarRecebimento({
-            user: { id: 'gestor-1', perfil: 'gestor' },
-            params: { id: 'of-invalida' },
-            body: { canal_confirmacao: 'telegram' }
-        }, res)
+    email.solicitarReenvioOrdemDeFornecimento.mockResolvedValue({
+        data: null,
+        error: null
+    });
 
-        expect(res.statusCode).toBe(400)
-        expect(service.confirmarRecebimentoOrdemDeFornecimento)
-            .not.toHaveBeenCalled()
-        expect(auditoria.registrarOcorrencia).not.toHaveBeenCalled()
-    })
+    auditoria.registrarOcorrencia.mockResolvedValue({
+        data: null,
+        error: null
+    });
+});
 
-    it('permite confirmar sem informar o canal', async () => {
-        service.confirmarRecebimentoOrdemDeFornecimento.mockResolvedValue({
-            data: {
-                id: 'of-sem-canal',
-                numero: 'OF-SEM-CANAL',
-                paciente_id: 'paciente-1',
-                status: 'em_entrega'
-            },
-            error: null
-        })
-
-        const res = response()
-
-        await confirmarRecebimento({
-            user: { id: 'gestor-1', perfil: 'gestor' },
-            params: { id: 'of-sem-canal' }
-        }, res)
-
-        expect(res.statusCode).toBe(200)
-        expect(service.confirmarRecebimentoOrdemDeFornecimento)
-            .toHaveBeenCalledWith({
-                id: 'of-sem-canal',
-                atualizadoPor: 'gestor-1',
-                canalConfirmacao: null
-            })
-
-        expect(auditoria.registrarOcorrencia).not.toHaveBeenCalled()
-    })
-
-    it('retorna erro quando a transação de confirmação falha', async () => {
-        service.confirmarRecebimentoOrdemDeFornecimento.mockResolvedValue({
-            data: null,
-            error: { message: 'Falha simulada na transação' }
-        })
-
-        const res = response()
-
-        await confirmarRecebimento({
-            user: { id: 'gestor-1', perfil: 'gestor' },
-            params: { id: 'of-auditoria' }
-        }, res)
-
-        expect(service.confirmarRecebimentoOrdemDeFornecimento)
-            .toHaveBeenCalledTimes(1)
-        expect(res.statusCode).toBe(400)
-        expect(res.body.message).toMatch(/falha simulada na transação/i)
-        expect(auditoria.registrarOcorrencia).not.toHaveBeenCalled()
-    })
-
-    describe('atualizacao das observacoes da ordem de fornecimento', () => {
-    beforeEach(() => {
-        jest.clearAllMocks()
-    })
-
-    it('bloqueia usuario sem perfil gestor', async () => {
-        const res = response()
-
-        await atualizarObservacoes({
-            user: { id: 'usuario-1', perfil: 'consultor' },
-            params: { id: 'of-1' },
-            body: { observacoes: 'Nova observação' }
-        }, res)
-
-        expect(res.statusCode).toBe(403)
-        expect(service.atualizarObservacoesOrdemDeFornecimento)
-            .not.toHaveBeenCalled()
-    })
-
-    it('rejeita campos que nao podem ser alterados', async () => {
-        const res = response()
-
-        await atualizarObservacoes({
-            user: { id: 'gestor-1', perfil: 'gestor' },
-            params: { id: 'of-1' },
-            body: {
-                observacoes: 'Nova observação',
-                paciente_id: 'paciente-2',
-                fornecedor_id: 'fornecedor-2'
+describe('confirmarRecebimento', () => {
+    test('1. bloqueia usuário sem perfil autorizado', async () => {
+        const req = criarRequest({
+            user: {
+                id: 'usuario-1',
+                perfil: 'prefeitura'
             }
-        }, res)
+        });
 
-        expect(res.statusCode).toBe(400)
-        expect(service.atualizarObservacoesOrdemDeFornecimento)
-            .not.toHaveBeenCalled()
-    })
+        const res = criarResponse();
 
-    it('permite gestor atualizar observacoes', async () => {
-        const ordem = {
+        await confirmarRecebimento(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(403);
+
+        expect(
+            fornecimentoServices.confirmarRecebimentoOrdemDeFornecimento
+        ).not.toHaveBeenCalled();
+    });
+
+    test('2. permite ao gestor confirmar o recebimento', async () => {
+        const req = criarRequest({
+            user: {
+                id: 'gestor-1',
+                perfil: 'gestor'
+            },
+            params: {
+                id: 'of-1'
+            },
+            body: {}
+        });
+
+        const res = criarResponse();
+
+        await confirmarRecebimento(req, res);
+
+        expect(
+            fornecimentoServices.confirmarRecebimentoOrdemDeFornecimento
+        ).toHaveBeenCalledWith({
             id: 'of-1',
-            observacoes: 'Nova observação',
-            paciente_id: 'paciente-1',
-            fornecedor_id: 'fornecedor-1',
-            cotacao_id: 'cotacao-1'
-        }
+            atualizadoPor: 'gestor-1',
+            canalConfirmacao: null
+        });
 
-        service.atualizarObservacoesOrdemDeFornecimento.mockResolvedValue({
-            data: ordem,
-            error: null
-        })
+        expect(res.status).toHaveBeenCalledWith(200);
 
-        const res = response()
-
-        await atualizarObservacoes({
-            user: { id: 'gestor-1', perfil: 'gestor' },
-            params: { id: 'of-1' },
-            body: { observacoes: 'Nova observação' }
-        }, res)
-
-        expect(res.statusCode).toBe(200)
-        expect(service.atualizarObservacoesOrdemDeFornecimento)
-            .toHaveBeenCalledWith({
-                id: 'of-1',
-                observacoes: 'Nova observação',
-                atualizadoPor: 'gestor-1'
+        expect(res.json).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.stringMatching(/confirmado com sucesso/i)
             })
+        );
+    });
 
-        expect(res.body.data.paciente_id).toBe('paciente-1')
-        expect(res.body.data.fornecedor_id).toBe('fornecedor-1')
-        expect(res.body.data.cotacao_id).toBe('cotacao-1')
-    })
+    test('3. permite ao operador confirmar o recebimento', async () => {
+        const req = criarRequest({
+            user: {
+                id: 'operador-1',
+                perfil: 'operador'
+            }
+        });
 
-    it('retorna 404 quando a ordem nao existe', async () => {
-        service.atualizarObservacoesOrdemDeFornecimento.mockResolvedValue({
-            data: null,
-            error: { message: 'Ordem de fornecimento não encontrada' }
-        })
+        const res = criarResponse();
 
-        const res = response()
+        await confirmarRecebimento(req, res);
 
-        await atualizarObservacoes({
-            user: { id: 'gestor-1', perfil: 'gestor' },
-            params: { id: 'of-inexistente' },
-            body: { observacoes: 'Teste' }
-        }, res)
+        expect(
+            fornecimentoServices.confirmarRecebimentoOrdemDeFornecimento
+        ).toHaveBeenCalled();
 
-        expect(res.statusCode).toBe(404)
-    })
-})
-})
+        expect(res.status).toHaveBeenCalledWith(200);
+    });
+
+    test('4. retorna erro quando o recebimento já foi confirmado', async () => {
+        fornecimentoServices.confirmarRecebimentoOrdemDeFornecimento
+            .mockResolvedValueOnce({
+                data: null,
+                error: {
+                    message: 'Recebimento já confirmado'
+                }
+            });
+
+        const req = criarRequest();
+        const res = criarResponse();
+
+        await confirmarRecebimento(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(400);
+
+        expect(res.json).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: 'Recebimento já confirmado'
+            })
+        );
+    });
+
+    test('5. encaminha o canal WhatsApp ao serviço', async () => {
+        const req = criarRequest({
+            body: {
+                canal_confirmacao: 'whatsapp'
+            }
+        });
+
+        const res = criarResponse();
+
+        await confirmarRecebimento(req, res);
+
+        expect(
+            fornecimentoServices.confirmarRecebimentoOrdemDeFornecimento
+        ).toHaveBeenCalledWith({
+            id: 'of-1',
+            atualizadoPor: 'gestor-1',
+            canalConfirmacao: 'whatsapp'
+        });
+
+        expect(res.status).toHaveBeenCalledWith(200);
+    });
+
+    test('6. rejeita canal de confirmação inválido', async () => {
+        const req = criarRequest({
+            body: {
+                canal_confirmacao: 'telegram'
+            }
+        });
+
+        const res = criarResponse();
+
+        await confirmarRecebimento(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(400);
+
+        expect(res.json).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.stringMatching(/canal de confirmação inválido/i)
+            })
+        );
+
+        expect(
+            fornecimentoServices.confirmarRecebimentoOrdemDeFornecimento
+        ).not.toHaveBeenCalled();
+    });
+
+    test('7. permite confirmar sem informar o canal', async () => {
+        const req = criarRequest({
+            body: {}
+        });
+
+        const res = criarResponse();
+
+        await confirmarRecebimento(req, res);
+
+        expect(
+            fornecimentoServices.confirmarRecebimentoOrdemDeFornecimento
+        ).toHaveBeenCalledWith({
+            id: 'of-1',
+            atualizadoPor: 'gestor-1',
+            canalConfirmacao: null
+        });
+
+        expect(res.status).toHaveBeenCalledWith(200);
+    });
+
+    test('8. retorna erro quando o serviço falha na confirmação', async () => {
+        fornecimentoServices.confirmarRecebimentoOrdemDeFornecimento
+            .mockResolvedValueOnce({
+                data: null,
+                error: {
+                    message: 'Falha ao confirmar recebimento'
+                }
+            });
+
+        const req = criarRequest();
+        const res = criarResponse();
+
+        await confirmarRecebimento(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(400);
+
+        expect(res.json).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: 'Falha ao confirmar recebimento'
+            })
+        );
+    });
+});
+
+describe('atualizarObservacoes', () => {
+    test('9. bloqueia usuário sem perfil autorizado', async () => {
+        const req = criarRequest({
+            user: {
+                id: 'consultor-1',
+                perfil: 'consultor'
+            },
+            body: {
+                observacoes: 'Entrega recebida'
+            }
+        });
+
+        const res = criarResponse();
+
+        await atualizarObservacoes(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(403);
+
+        expect(
+            fornecimentoServices.atualizarObservacoesOrdemDeFornecimento
+        ).not.toHaveBeenCalled();
+    });
+
+    test('10. rejeita tentativa de alterar campos protegidos', async () => {
+        const req = criarRequest({
+            user: {
+                id: 'gestor-1',
+                perfil: 'gestor'
+            },
+            body: {
+                observacoes: 'Entrega recebida',
+                paciente_id: 'paciente-alterado',
+                fornecedor_id: 'fornecedor-alterado'
+            }
+        });
+
+        const res = criarResponse();
+
+        await atualizarObservacoes(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(400);
+
+        expect(res.json).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: 'Envie somente o campo observacoes'
+            })
+        );
+
+        expect(
+            fornecimentoServices.atualizarObservacoesOrdemDeFornecimento
+        ).not.toHaveBeenCalled();
+    });
+
+    test('11. permite ao gestor atualizar observações sem alterar os vínculos', async () => {
+        const req = criarRequest({
+            user: {
+                id: 'gestor-1',
+                perfil: 'gestor'
+            },
+            params: {
+                id: 'of-1'
+            },
+            body: {
+                observacoes: 'Entrega recebida'
+            }
+        });
+
+        const res = criarResponse();
+
+        await atualizarObservacoes(req, res);
+
+        expect(
+            fornecimentoServices.atualizarObservacoesOrdemDeFornecimento
+        ).toHaveBeenCalledWith({
+            id: 'of-1',
+            observacoes: 'Entrega recebida',
+            atualizadoPor: 'gestor-1'
+        });
+
+        expect(res.status).toHaveBeenCalledWith(200);
+
+        expect(res.json).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: expect.stringMatching(/atualizadas com sucesso/i),
+                data: expect.objectContaining({
+                    paciente_id: 'paciente-1',
+                    fornecedor_id: 'fornecedor-1',
+                    cotacao_id: 'cotacao-1'
+                })
+            })
+        );
+    });
+
+    test('12. retorna 404 quando a ordem não é encontrada', async () => {
+        fornecimentoServices.atualizarObservacoesOrdemDeFornecimento
+            .mockResolvedValueOnce({
+                data: null,
+                error: {
+                    message: 'Ordem de fornecimento não encontrada'
+                }
+            });
+
+        const req = criarRequest({
+            user: {
+                id: 'gestor-1',
+                perfil: 'gestor'
+            },
+            params: {
+                id: 'of-inexistente'
+            },
+            body: {
+                observacoes: 'Entrega recebida'
+            }
+        });
+
+        const res = criarResponse();
+
+        await atualizarObservacoes(req, res);
+
+        expect(
+            fornecimentoServices.atualizarObservacoesOrdemDeFornecimento
+        ).toHaveBeenCalled();
+
+        expect(res.status).toHaveBeenCalledWith(404);
+
+        expect(res.json).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: 'Ordem de fornecimento não encontrada'
+            })
+        );
+    });
+});

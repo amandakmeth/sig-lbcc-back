@@ -304,10 +304,11 @@ export async function baixarPdfOrdem(req, res) {
 }
 
 export async function finalizarOrdem(req, res) {
-    if (req.user?.perfil !== 'gestor') {
-        return res.status(403).json({ message: 'Apenas gestor pode finalizar a ordem de fornecimento' });
-    }
-
+   if (!['gestor', 'operador'].includes(req.user?.perfil)) {
+    return res.status(403).json({
+        message: 'Apenas operador ou gestor pode finalizar a ordem de fornecimento'
+    });
+}
     const resultado = await finalizarOrdemDeFornecimento({
         id: req.params.id,
         atualizadoPor: req.user.id
