@@ -265,7 +265,7 @@ export async function gerarOrdensDeFornecimento({ cotacaoId, criadoPor }) {
     return {
       data: null,
       error: {
-        message: "Cotação não encontrada",
+        message: "CotaÃ§Ã£o nÃ£o encontrada",
       },
     };
   }
@@ -276,7 +276,7 @@ export async function gerarOrdensDeFornecimento({ cotacaoId, criadoPor }) {
     return {
       data: null,
       error: {
-        message: "Só é possível gerar ordens de fornecimento para uma cotação finalizada",
+        message: "SÃ³ Ã© possÃ­vel gerar ordens de fornecimento para uma cotaÃ§Ã£o finalizada",
       },
     };
   }
@@ -286,7 +286,7 @@ export async function gerarOrdensDeFornecimento({ cotacaoId, criadoPor }) {
     return {
     data: null,
     error: {
-      message: "Não é possível gerar ordens para uma cotação inativa",
+      message: "NÃ£o Ã© possÃ­vel gerar ordens para uma cotaÃ§Ã£o inativa",
     },
     };
     }
@@ -295,7 +295,7 @@ export async function gerarOrdensDeFornecimento({ cotacaoId, criadoPor }) {
     return {
     data: null,
     error: {
-      message: "Não é possível gerar ordens sem paciente associado à cotação",
+      message: "NÃ£o Ã© possÃ­vel gerar ordens sem paciente associado Ã  cotaÃ§Ã£o",
     },
     };
     }
@@ -319,7 +319,7 @@ export async function gerarOrdensDeFornecimento({ cotacaoId, criadoPor }) {
     return {
       data: null,
       error: {
-        message: "Não é possível gerar ordens para uma cotação vencida",
+        message: "NÃ£o Ã© possÃ­vel gerar ordens para uma cotaÃ§Ã£o vencida",
       },
     };
     }
@@ -372,7 +372,7 @@ export async function gerarOrdensDeFornecimento({ cotacaoId, criadoPor }) {
     return {
       data: null,
       error: {
-        message: "Nenhum orçamento vencedor foi encontrado para esta cotação",
+        message: "Nenhum orÃ§amento vencedor foi encontrado para esta cotaÃ§Ã£o",
       },
     };
   }
@@ -416,7 +416,7 @@ export async function gerarOrdensDeFornecimento({ cotacaoId, criadoPor }) {
     return {
       data: null,
       error: {
-        message: "As ordens de fornecimento desta cotaÃ§Ã£o jÃ¡ foram geradas",
+        message: "As ordens de fornecimento desta cotaÃƒÂ§ÃƒÂ£o jÃƒÂ¡ foram geradas",
       },
     };
   }
@@ -505,7 +505,7 @@ export async function gerarOrdensDeFornecimento({ cotacaoId, criadoPor }) {
     return {
       data: null,
       error: {
-        message: "As ordens de fornecimento desta cotação já foram geradas",
+        message: "As ordens de fornecimento desta cotaÃ§Ã£o jÃ¡ foram geradas",
       },
     };
   }
@@ -598,7 +598,7 @@ export async function buscarOrdemDeFornecimento(id) {
     return {
       data: null,
       error: {
-        message: "Ordem de fornecimento não encontrada"
+        message: "Ordem de fornecimento nÃ£o encontrada"
       }
     };
   }
@@ -639,7 +639,7 @@ export async function confirmarRecebimentoOrdemDeFornecimento({
       error: {
         message:
           resultado?.message ||
-          'Não foi possível confirmar o recebimento da ordem de fornecimento'
+          'NÃ£o foi possÃ­vel confirmar o recebimento da ordem de fornecimento'
       }
     };
   }
@@ -650,72 +650,132 @@ export async function confirmarRecebimentoOrdemDeFornecimento({
 
 
 
+
 export async function finalizarOrdemDeFornecimento({ id, atualizadoPor }) {
   const { data: ordem, error: buscaError } = await supabase
     .from("ordens_fornecimento")
     .select(
-      "id, numero, paciente_id, status, data_previsao_entrega, prazo_ciclo, status_prazo",
+      "id, numero, paciente_id, status, data_previsao_entrega, prazo_ciclo, status_prazo"
     )
     .eq("id", id)
     .single();
 
   if (buscaError || !ordem) {
-    return { data: null, error: { message: "Ordem de fornecimento nao encontrada" } };
-  }
-
-  if (ordem.status === "finalizada") {
-    const responsaveis = await obterResponsaveis(id);
-    if (responsaveis.error) return { data: null, error: responsaveis.error };
-
-    const eventoError = await registrarAlteracaoDePrazo({
-      ordem,
-      ciclo: Number(ordem.prazo_ciclo || 1),
-      dataLimite: toDateOnly(ordem.data_previsao_entrega),
-      statusPrazo: ordem.status_prazo || STATUS_PRAZO.NORMAL,
-      tipoEvento: "ORDEM_FINALIZADA",
-      tipoEventoPaciente: "OF_FINALIZADA",
-      descricao: `A Ordem de Fornecimento ${ordem.numero} foi finalizada.`,
-      responsavelIds: responsaveis.ids,
-      usuarioId: atualizadoPor,
-      idempotencyKey: `of:${id}:finalizacao`,
-    });
-
-    if (eventoError) return { data: null, error: eventoError };
-    return await buscarOrdemDeFornecimento(id);
-  }
-
-  if (["rascunho", "cancelada"].includes(ordem.status)) {
     return {
       data: null,
-      error: { message: "A ordem de fornecimento nao pode ser finalizada neste status" },
+      error: { message: "Ordem de fornecimento nao encontrada" }
     };
   }
 
+  if (ordem.status === "finalizada") {
+    return await buscarOrdemDeFornecimento(id);
+  }
+
+  const statusPermitidos = ["enviada", "em_entrega", "entregue"];
+
+  if (!statusPermitidos.includes(ordem.status)) {
+    return {
+      data: null,
+      error: {
+        message:
+          "A ordem de fornecimento nao pode ser finalizada neste status"
+      }
+    };
+  }
+
+  // RF_F9: exige atendimento integral de todos os itens.
+  const { data: itens, error: itensError } = await supabase
+    .from("ordem_fornecimento_itens")
+    .select(
+      "id, descricao, quantidade_solicitada, quantidade_entregue"
+    )
+    .eq("ordem_fornecimento_id", id);
+
+  if (itensError) {
+    return {
+      data: null,
+      error: {
+        message: "Nao foi possivel validar a entrega dos itens da ordem",
+        cause: itensError
+      }
+    };
+  }
+
+  if (!itens || itens.length === 0) {
+    return {
+      data: null,
+      error: {
+        message: "A ordem nao pode ser finalizada sem itens cadastrados"
+      }
+    };
+  }
+
+  const itemPendente = itens.find((item) => {
+    const solicitada = Number(item.quantidade_solicitada);
+    const entregue = Number(item.quantidade_entregue);
+
+    if (
+      !Number.isFinite(solicitada) ||
+      !Number.isFinite(entregue) ||
+      solicitada < 0 ||
+      entregue < 0
+    ) {
+      return true;
+    }
+
+    return Math.abs(solicitada - entregue) > 1e-9;
+  });
+
+  if (itemPendente) {
+    return {
+      data: null,
+      error: {
+        code: "ENTREGA_INCOMPLETA",
+        message:
+          "A ordem nao pode ser finalizada: existem itens com entrega incompleta ou quantidade divergente."
+      }
+    };
+  }
+
+  const responsaveis = await obterResponsaveis(id);
+
+  if (responsaveis.error) {
+    return { data: null, error: responsaveis.error };
+  }
+
+  // AtualizaÃ§Ã£o condicional para evitar finalizar uma ordem
+  // que tenha mudado de status desde a leitura inicial.
   const { data: atualizada, error: updateError } = await supabase
     .from("ordens_fornecimento")
     .update({
       status: "finalizada",
       data_finalizacao: new Date().toISOString(),
-      atualizado_por: atualizadoPor || null,
+      atualizado_por: atualizadoPor || null
     })
     .eq("id", id)
-    .in("status", ["enviada", "em_entrega", "entregue"])
+    .in("status", statusPermitidos)
     .select("id")
     .maybeSingle();
 
-  if (updateError) return { data: null, error: updateError };
+  if (updateError) {
+    return { data: null, error: updateError };
+  }
+
   if (!atualizada) {
     return {
       data: null,
-      error: { message: "A ordem de fornecimento nao pode ser finalizada neste status" },
+      error: {
+        message:
+          "A ordem nao pode ser finalizada: seu status foi alterado ou nao permite finalizacao."
+      }
     };
   }
 
-  const responsaveis = await obterResponsaveis(id);
-  if (responsaveis.error) return { data: null, error: responsaveis.error };
-
   const eventoError = await registrarAlteracaoDePrazo({
-    ordem,
+    ordem: {
+      ...ordem,
+      status: "finalizada"
+    },
     ciclo: Number(ordem.prazo_ciclo || 1),
     dataLimite: toDateOnly(ordem.data_previsao_entrega),
     statusPrazo: ordem.status_prazo || STATUS_PRAZO.NORMAL,
@@ -724,13 +784,26 @@ export async function finalizarOrdemDeFornecimento({ id, atualizadoPor }) {
     descricao: `A Ordem de Fornecimento ${ordem.numero} foi finalizada.`,
     responsavelIds: responsaveis.ids,
     usuarioId: atualizadoPor,
-    idempotencyKey: `of:${id}:finalizacao`,
+    idempotencyKey: `of:${id}:finalizacao`
   });
 
-  if (eventoError) return { data: null, error: eventoError };
+  if (eventoError) {
+    // A ordem jÃ¡ foi finalizada. NÃ£o fingir que a atualizaÃ§Ã£o foi desfeita.
+    return {
+      data: null,
+      error: {
+        message:
+          "A ordem foi finalizada, mas houve erro ao registrar o historico.",
+        cause: eventoError,
+        code: "FINALIZADA_HISTORICO_PENDENTE"
+      }
+    };
+  }
+
   return await buscarOrdemDeFornecimento(id);
 }
 
+  // RF_F9: nÃ£o finalizar sem comprovar o atendimento integral dos itens.
 export async function listarGestoresResponsaveis() {
   return await supabase
     .from("usuarios")
@@ -926,7 +999,7 @@ export async function atualizarStatusPrazoOrdem({ id, statusPrazo, usuarioId }) 
 }
 
 // =========================
-// ATUALIZAR OBSERVAÇÕES DA OF
+// ATUALIZAR OBSERVAÃ‡Ã•ES DA OF
 // =========================
 
 export async function atualizarObservacoesOrdemDeFornecimento({
@@ -953,7 +1026,7 @@ export async function atualizarObservacoesOrdemDeFornecimento({
       error: {
         message:
           resultado?.message ||
-          'Não foi possível atualizar as observações da ordem de fornecimento'
+          'NÃ£o foi possÃ­vel atualizar as observaÃ§Ãµes da ordem de fornecimento'
       }
     };
   }
