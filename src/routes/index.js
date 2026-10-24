@@ -16,7 +16,7 @@ import fornecimentoRoutes from '../modules/fornecimento/routes/fornecimento.rout
 import calendarioRoutes from '../modules/calendario/routes/calendario.routes.js'
 import notificacoesRoutes from '../modules/notificacoes/routes/notificacoes.routes.js'
 import operacaoRoutes from '../modules/operacao/routes/operacao.routes.js'
-
+import transporteRoutes from '../modules/transporte/routes/ordensTransporte.routes.js'
 
 const router = express.Router()
 
@@ -42,7 +42,7 @@ router.use('/fornecimento', fornecimentoRoutes);
 router.use('/calendario/feriados', calendarioRoutes);
 router.use('/notificacoes', notificacoesRoutes);
 router.use('/operacao', operacaoRoutes);
-
+router.use('/transporte', transporteRoutes)
 // Documentos (usa rotas próprias internas)
 
 router.use(pacienteDocumentosRoutes)
