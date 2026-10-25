@@ -1,4 +1,4 @@
-import 'dotenv/config'
+import 'dotenv/config';
 import app from './src/app.js'
 import { iniciarJobDeProximidade } from './src/modules/notificacoes/services/proximidade.job.js'
 import { iniciarJobDeLembretesFornecedor } from './src/modules/notificacoes/services/lembretes-fornecedor.service.js'

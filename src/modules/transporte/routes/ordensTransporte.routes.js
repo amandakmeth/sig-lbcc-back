@@ -14,7 +14,14 @@ const router = express.Router();
 
 router.use(authMiddleware);
 
-router.post('/ordens', postOrdemTransporte);
+router.post('/ordens', (req, res, next) => {
+    console.log('[RF_F11] POST /transporte/ordens chegou à rota');
+    console.log('[RF_F11] Método:', req.method);
+    console.log('[RF_F11] URL:', req.originalUrl);
+    console.log('[RF_F11] Usuário autenticado:', Boolean(req.user));
+
+    next();
+}, postOrdemTransporte);
 
 router.get(
     '/ordens/:id/vouchers/:voucherId/pdf',

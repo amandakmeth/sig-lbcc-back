@@ -94,6 +94,7 @@ GRANT SELECT, INSERT, UPDATE ON TABLE public.ordem_transporte_vouchers
 -- Registrar a entrega do voucher e atualizar o estado da OT
 -- na mesma transação.
 
+
 CREATE OR REPLACE FUNCTION public.registrar_entrega_voucher_transporte(
     p_ordem_id UUID,
     p_voucher_id UUID,
@@ -108,8 +109,9 @@ DECLARE
     v_ordem public.ordens_transporte%ROWTYPE;
     v_voucher public.ordem_transporte_vouchers%ROWTYPE;
 BEGIN
-    IF p_entregue_por IS NULL THEN
-        RAISE EXCEPTION 'USUARIO_OBRIGATORIO';
+    IF p_ordem_id IS NULL OR p_voucher_id IS NULL
+       OR p_entregue_por IS NULL THEN
+        RAISE EXCEPTION 'DADOS_OBRIGATORIOS';
     END IF;
 
     IF p_destinatario IS NULL OR LENGTH(TRIM(p_destinatario)) = 0 THEN
@@ -137,7 +139,12 @@ BEGIN
         RAISE EXCEPTION 'VOUCHER_NAO_ENCONTRADO';
     END IF;
 
-    IF v_ordem.status <> 'emitida' THEN
+    IF v_ordem.status NOT IN ('emitida', 'entregue') THEN
+        RAISE EXCEPTION 'OT_NAO_PODE_SER_ENTREGUE';
+    END IF;
+
+    IF v_ordem.status = 'entregue'
+       AND v_voucher.tipo_via <> 'segunda_via' THEN
         RAISE EXCEPTION 'OT_NAO_PODE_SER_ENTREGUE';
     END IF;
 
@@ -157,11 +164,13 @@ BEGIN
      WHERE id = p_voucher_id
      RETURNING * INTO v_voucher;
 
-    UPDATE public.ordens_transporte
-       SET status = 'entregue',
-           updated_at = NOW()
-     WHERE id = p_ordem_id
-     RETURNING * INTO v_ordem;
+    IF v_ordem.status = 'emitida' THEN
+        UPDATE public.ordens_transporte
+           SET status = 'entregue',
+               updated_at = NOW()
+         WHERE id = p_ordem_id
+         RETURNING * INTO v_ordem;
+    END IF;
 
     RETURN jsonb_build_object(
         'ordem', to_jsonb(v_ordem),

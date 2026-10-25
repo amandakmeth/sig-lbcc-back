@@ -57,15 +57,24 @@ jest.unstable_mockModule(
         solicitarReenvioOrdemDeFornecimento: jest.fn()
     })
 )
-
+// Simula o serviço de recibos para não inicializar o Supabase real.
+jest.unstable_mockModule(
+    '../src/modules/fornecimento/services/fornecimento-recibo.service.js',
+    () => ({
+        reenviarReciboFinalizacaoOF: jest.fn()
+    })
+)
 // Importa o controller somente depois de registrar os mocks.
 const {
     confirmarRecebimento,
-    atualizarObservacoes
+    atualizarObservacoes,
+    reenviarReciboOF
 } = await import(
     '../src/modules/fornecimento/controller/fornecimento.controller.js'
 )
-
+const reciboService = await import(
+    '../src/modules/fornecimento/services/fornecimento-recibo.service.js'
+)
 function response() {
     return {
         statusCode: 200,
@@ -221,5 +230,91 @@ describe('confirmacao de recebimento da ordem de fornecimento', () => {
             atualizadoPor: 'gestor-1',
             canalConfirmacao: 'whatsapp'
         })
+    })
+})
+
+describe('reenvio do recibo da ordem de fornecimento', () => {
+    beforeEach(() => {
+        jest.clearAllMocks()
+    })
+
+    it('bloqueia usuario que nao seja gestor', async () => {
+        const req = {
+            user: { id: 'usuario-1', perfil: 'operador' },
+            params: { id: 'of-123' }
+        }
+        const res = response()
+
+        await reenviarReciboOF(req, res)
+
+        expect(res.statusCode).toBe(403)
+        expect(
+            reciboService.reenviarReciboFinalizacaoOF
+        ).not.toHaveBeenCalled()
+    })
+
+    it('permite gestor reenviar o recibo', async () => {
+        reciboService.reenviarReciboFinalizacaoOF.mockResolvedValue({
+            data: { status: 'enviado' },
+            error: null
+        })
+
+        const req = {
+            user: { id: 'gestor-1', perfil: 'gestor' },
+            params: { id: 'of-123' }
+        }
+        const res = response()
+
+        await reenviarReciboOF(req, res)
+
+        expect(
+            reciboService.reenviarReciboFinalizacaoOF
+        ).toHaveBeenCalledWith({
+            ordemId: 'of-123',
+            usuarioId: 'gestor-1'
+        })
+        expect(res.statusCode).toBe(200)
+        expect(res.body.data.status).toBe('enviado')
+    })
+
+    it('retorna 404 quando o recibo nao existe', async () => {
+        reciboService.reenviarReciboFinalizacaoOF.mockResolvedValue({
+            data: null,
+            error: {
+                code: 'RECIBO_NAO_ENCONTRADO',
+                message: 'Recibo nao encontrado'
+            }
+        })
+
+        const req = {
+            user: { id: 'gestor-1', perfil: 'gestor' },
+            params: { id: 'of-123' }
+        }
+        const res = response()
+
+        await reenviarReciboOF(req, res)
+
+        expect(res.statusCode).toBe(404)
+        expect(res.body.code).toBe('RECIBO_NAO_ENCONTRADO')
+    })
+
+    it('retorna 409 quando o recibo ja esta sendo enviado', async () => {
+        reciboService.reenviarReciboFinalizacaoOF.mockResolvedValue({
+            data: null,
+            error: {
+                code: 'RECIBO_EM_ENVIO',
+                message: 'Recibo em processo de envio'
+            }
+        })
+
+        const req = {
+            user: { id: 'gestor-1', perfil: 'gestor' },
+            params: { id: 'of-123' }
+        }
+        const res = response()
+
+        await reenviarReciboOF(req, res)
+
+        expect(res.statusCode).toBe(409)
     })
 })

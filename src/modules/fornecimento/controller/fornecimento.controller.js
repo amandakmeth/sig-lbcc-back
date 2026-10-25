@@ -9,6 +9,10 @@ import {
     finalizarOrdemDeFornecimento,
     atualizarObservacoesOrdemDeFornecimento
 } from '../services/fornecimento.services.js';
+
+import {
+    reenviarReciboFinalizacaoOF
+} from '../services/fornecimento-recibo.service.js';
 import {
     buscarLembreteFornecedor,
     enviarLembreteFornecedor,
@@ -286,6 +290,52 @@ export async function reenviarEmailOrdem(req, res) {
         data: resultado.data
     });
 }
+
+
+
+export async function reenviarReciboOF(req, res) {
+    if (req.user?.perfil !== 'gestor') {
+        return res.status(403).json({
+            message: 'Apenas gestor pode reenviar o recibo da ordem'
+        });
+    }
+
+    try {
+        const resultado = await reenviarReciboFinalizacaoOF({
+            ordemId: req.params.id,
+            usuarioId: req.user.id
+        });
+
+        if (resultado.error) {
+            const statusPorCodigo = {
+                RECIBO_NAO_ENCONTRADO: 404,
+                RECIBO_EM_ENVIO: 409,
+                RECIBO_NAO_REENVIAVEL: 409,
+                FALHA_ENVIO_RECIBO: 502,
+                PERSISTENCIA_ENVIO_PENDENTE: 500
+            };
+
+            return res
+                .status(statusPorCodigo[resultado.error.code] ?? 500)
+                .json({
+                    message: resultado.error.message,
+                    code: resultado.error.code
+                });
+        }
+
+        return res.status(200).json({
+            message: 'Reenvio do recibo solicitado com sucesso',
+            data: resultado.data
+        });
+    } catch (error) {
+        console.error('[RF_F9] Erro ao reenviar recibo:', error);
+
+        return res.status(500).json({
+            message: 'Erro interno ao reenviar o recibo da ordem'
+        });
+    }
+}
+
 
 export async function baixarPdfOrdem(req, res) {
     const resultado = await obterPdfOrdemDeFornecimento({ ordemId: req.params.id });

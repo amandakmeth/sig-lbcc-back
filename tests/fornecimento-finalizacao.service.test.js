@@ -193,10 +193,14 @@ describe('RF_F9 - finalização de Ordem de Fornecimento', () => {
     });
 
     it('tenta finalizar uma ordem quando todos os itens foram entregues', async () => {
-        const resultado = await finalizarOrdemDeFornecimento({
-            id: 'of-1',
-            atualizadoPor: 'operador-1'
-        });
+       const resultado = await finalizarOrdemDeFornecimento({
+    id: 'of-1',
+    atualizadoPor: 'operador-1',
+    enviarRecibo: jest.fn().mockResolvedValue({
+        data: { status: 'enviado' },
+        error: null
+    })
+});
 
         expect(atualizacaoExecutada).toBe(true);
 

@@ -10,6 +10,9 @@ import {
     gerarSegundaViaVoucherTransporte
 } from '../services/ordensTransporte.service.js';
 export async function postOrdemTransporte(req, res) {
+    console.log('[RF_F11] Controller postOrdemTransporte executado');
+    console.log('[RF_F11] Método:', req.method);
+    console.log('[RF_F11] URL:', req.originalUrl);
     try {
         const {
             cotacao_id,

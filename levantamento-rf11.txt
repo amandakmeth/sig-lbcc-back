@@ -1,0 +1,883 @@
+﻿
+  src\modules\transporte\controllers\ordensTransporte.controller.js:1:import {
+> src\modules\transporte\controllers\ordensTransporte.controller.js:2:    buildVoucherTransportePdf,
+> src\modules\transporte\controllers\ordensTransporte.controller.js:3:    nomeArquivoVoucherTransporte
+> src\modules\transporte\controllers\ordensTransporte.controller.js:4:} from 
+'../services/voucher-transporte-pdf.service.js';
+  src\modules\transporte\controllers\ordensTransporte.controller.js:5:
+  src\modules\transporte\controllers\ordensTransporte.controller.js:6:import {
+  src\modules\transporte\controllers\ordensTransporte.controller.js:7:    emitirOrdemDeTransporte,
+> src\modules\transporte\controllers\ordensTransporte.controller.js:8:    buscarVoucherTransporte,
+> src\modules\transporte\controllers\ordensTransporte.controller.js:9:    registrarEntregaVoucherTransporte,
+> src\modules\transporte\controllers\ordensTransporte.controller.js:10:    gerarSegundaViaVoucherTransporte
+  src\modules\transporte\controllers\ordensTransporte.controller.js:11:} from '../services/ordensTransporte.service.js';
+  src\modules\transporte\controllers\ordensTransporte.controller.js:12:export async function postOrdemTransporte(req, 
+res) {
+  src\modules\transporte\controllers\ordensTransporte.controller.js:13:    try {
+  src\modules\transporte\controllers\ordensTransporte.controller.js:60:    } catch (err) {
+> src\modules\transporte\controllers\ordensTransporte.controller.js:61:        console.error('Erro ao emitir Ordem de 
+Transporte:', err);
+  src\modules\transporte\controllers\ordensTransporte.controller.js:62:        return res.status(500).json({
+> src\modules\transporte\controllers\ordensTransporte.controller.js:63:            erro: 'Erro interno ao emitir Ordem 
+de Transporte.'
+  src\modules\transporte\controllers\ordensTransporte.controller.js:64:        });
+  src\modules\transporte\controllers\ordensTransporte.controller.js:65:    }
+  src\modules\transporte\controllers\ordensTransporte.controller.js:66:}
+  src\modules\transporte\controllers\ordensTransporte.controller.js:67:
+> src\modules\transporte\controllers\ordensTransporte.controller.js:68:export async function 
+getVoucherTransportePdf(req, res) {
+  src\modules\transporte\controllers\ordensTransporte.controller.js:69:    try {
+> src\modules\transporte\controllers\ordensTransporte.controller.js:70:        const { id, voucherId } = req.params;
+  src\modules\transporte\controllers\ordensTransporte.controller.js:71:
+> src\modules\transporte\controllers\ordensTransporte.controller.js:72:        const { data, error } = await 
+buscarVoucherTransporte(id, voucherId);
+  src\modules\transporte\controllers\ordensTransporte.controller.js:73:
+  src\modules\transporte\controllers\ordensTransporte.controller.js:74:        if (error) {
+  src\modules\transporte\controllers\ordensTransporte.controller.js:75:            const status = [
+  src\modules\transporte\controllers\ordensTransporte.controller.js:76:                'OT_NAO_ENCONTRADA',
+> src\modules\transporte\controllers\ordensTransporte.controller.js:77:                'VOUCHER_NAO_ENCONTRADO'
+  src\modules\transporte\controllers\ordensTransporte.controller.js:78:            ].includes(error.code) ? 404 : 500;
+  src\modules\transporte\controllers\ordensTransporte.controller.js:79:
+  src\modules\transporte\controllers\ordensTransporte.controller.js:80:            return res.status(status).json({
+> src\modules\transporte\controllers\ordensTransporte.controller.js:81:                erro: error.message || 'Não foi 
+possível consultar o voucher.'
+  src\modules\transporte\controllers\ordensTransporte.controller.js:82:            });
+  src\modules\transporte\controllers\ordensTransporte.controller.js:83:        }
+  src\modules\transporte\controllers\ordensTransporte.controller.js:84:
+> src\modules\transporte\controllers\ordensTransporte.controller.js:85:        const pdf = 
+buildVoucherTransportePdf(data, data.voucher);
+> src\modules\transporte\controllers\ordensTransporte.controller.js:86:        const arquivo = 
+nomeArquivoVoucherTransporte(data, data.voucher);
+  src\modules\transporte\controllers\ordensTransporte.controller.js:87:
+  src\modules\transporte\controllers\ordensTransporte.controller.js:88:        res.setHeader('Content-Type', 
+'application/pdf');
+  src\modules\transporte\controllers\ordensTransporte.controller.js:89:        res.setHeader(
+  src\modules\transporte\controllers\ordensTransporte.controller.js:95:    } catch (err) {
+> src\modules\transporte\controllers\ordensTransporte.controller.js:96:        console.error('Erro ao gerar PDF do 
+voucher:', err);
+  src\modules\transporte\controllers\ordensTransporte.controller.js:97:        return res.status(500).json({
+> src\modules\transporte\controllers\ordensTransporte.controller.js:98:            erro: 'Erro interno ao gerar o PDF 
+do voucher.'
+  src\modules\transporte\controllers\ordensTransporte.controller.js:99:        });
+  src\modules\transporte\controllers\ordensTransporte.controller.js:100:    }
+  src\modules\transporte\controllers\ordensTransporte.controller.js:101:}
+> src\modules\transporte\controllers\ordensTransporte.controller.js:102:export async function 
+postEntregaVoucherTransporte(req, res) {
+  src\modules\transporte\controllers\ordensTransporte.controller.js:103:    try {
+> src\modules\transporte\controllers\ordensTransporte.controller.js:104:        const { id, voucherId } = req.params;
+  src\modules\transporte\controllers\ordensTransporte.controller.js:105:        const { destinatario } = req.body;
+  src\modules\transporte\controllers\ordensTransporte.controller.js:106:
+> src\modules\transporte\controllers\ordensTransporte.controller.js:107:        const { data, error } = await 
+registrarEntregaVoucherTransporte({
+  src\modules\transporte\controllers\ordensTransporte.controller.js:108:            ordemId: id,
+> src\modules\transporte\controllers\ordensTransporte.controller.js:109:            voucherId,
+  src\modules\transporte\controllers\ordensTransporte.controller.js:110:            entreguePor: req.user?.id,
+  src\modules\transporte\controllers\ordensTransporte.controller.js:111:            destinatario
+  src\modules\transporte\controllers\ordensTransporte.controller.js:112:        });
+  src\modules\transporte\controllers\ordensTransporte.controller.js:116:                OT_NAO_ENCONTRADA: 404,
+> src\modules\transporte\controllers\ordensTransporte.controller.js:117:                VOUCHER_NAO_ENCONTRADO: 404,
+  src\modules\transporte\controllers\ordensTransporte.controller.js:118:                DESTINATARIO_OBRIGATORIO: 400,
+  src\modules\transporte\controllers\ordensTransporte.controller.js:119:                USUARIO_OBRIGATORIO: 401,
+  src\modules\transporte\controllers\ordensTransporte.controller.js:120:                OT_NAO_PODE_SER_ENTREGUE: 409,
+  src\modules\transporte\controllers\ordensTransporte.controller.js:121:                OT_VENCIDA: 409,
+> src\modules\transporte\controllers\ordensTransporte.controller.js:122:                VOUCHER_JA_ENTREGUE: 409
+  src\modules\transporte\controllers\ordensTransporte.controller.js:123:            };
+  src\modules\transporte\controllers\ordensTransporte.controller.js:124:
+  src\modules\transporte\controllers\ordensTransporte.controller.js:125:            return 
+res.status(statusPorCodigo[error.code] || 500).json({
+  src\modules\transporte\controllers\ordensTransporte.controller.js:132:    } catch (err) {
+> src\modules\transporte\controllers\ordensTransporte.controller.js:133:        console.error('Erro ao registrar 
+entrega do voucher:', err);
+  src\modules\transporte\controllers\ordensTransporte.controller.js:134:
+  src\modules\transporte\controllers\ordensTransporte.controller.js:135:        return res.status(500).json({
+> src\modules\transporte\controllers\ordensTransporte.controller.js:136:            erro: 'Erro interno ao registrar a 
+entrega do voucher.'
+  src\modules\transporte\controllers\ordensTransporte.controller.js:137:        });
+  src\modules\transporte\controllers\ordensTransporte.controller.js:138:    }
+  src\modules\transporte\controllers\ordensTransporte.controller.js:139:}
+  src\modules\transporte\controllers\ordensTransporte.controller.js:140:
+> src\modules\transporte\controllers\ordensTransporte.controller.js:141:export async function 
+postSegundaViaVoucherTransporte(req, res) {
+  src\modules\transporte\controllers\ordensTransporte.controller.js:142:    try {
+  src\modules\transporte\controllers\ordensTransporte.controller.js:143:        const { id } = req.params;
+  src\modules\transporte\controllers\ordensTransporte.controller.js:144:
+> src\modules\transporte\controllers\ordensTransporte.controller.js:145:        const { data, error } = await 
+gerarSegundaViaVoucherTransporte({
+  src\modules\transporte\controllers\ordensTransporte.controller.js:146:            ordemId: id,
+  src\modules\transporte\controllers\ordensTransporte.controller.js:147:            emitidoPor: req.user?.id
+  src\modules\transporte\controllers\ordensTransporte.controller.js:148:        });
+  src\modules\transporte\controllers\ordensTransporte.controller.js:166:    } catch (err) {
+> src\modules\transporte\controllers\ordensTransporte.controller.js:167:        console.error('Erro ao emitir segunda 
+via do voucher:', err);
+  src\modules\transporte\controllers\ordensTransporte.controller.js:168:
+  src\modules\transporte\controllers\ordensTransporte.controller.js:169:        return res.status(500).json({
+> src\modules\transporte\controllers\ordensTransporte.controller.js:170:            erro: 'Erro interno ao emitir a 
+segunda via do voucher.'
+  src\modules\transporte\controllers\ordensTransporte.controller.js:171:        });
+  src\modules\transporte\controllers\ordensTransporte.controller.js:172:    }
+  src\modules\transporte\controllers\ordensTransporte.controller.js:173:}
+  src\modules\transporte\routes\ordensTransporte.routes.js:5:    postOrdemTransporte,
+> src\modules\transporte\routes\ordensTransporte.routes.js:6:    getVoucherTransportePdf,
+> src\modules\transporte\routes\ordensTransporte.routes.js:7:    postEntregaVoucherTransporte,
+> src\modules\transporte\routes\ordensTransporte.routes.js:8:    postSegundaViaVoucherTransporte
+  src\modules\transporte\routes\ordensTransporte.routes.js:9:} from '../controllers/ordensTransporte.controller.js';
+  src\modules\transporte\routes\ordensTransporte.routes.js:10:
+  src\modules\transporte\routes\ordensTransporte.routes.js:11:import { authMiddleware } from 
+'../../auth/middlewares/auth.middleware.js';
+  src\modules\transporte\routes\ordensTransporte.routes.js:19:router.get(
+> src\modules\transporte\routes\ordensTransporte.routes.js:20:    '/ordens/:id/vouchers/:voucherId/pdf',
+> src\modules\transporte\routes\ordensTransporte.routes.js:21:    getVoucherTransportePdf
+  src\modules\transporte\routes\ordensTransporte.routes.js:22:);
+  src\modules\transporte\routes\ordensTransporte.routes.js:23:
+  src\modules\transporte\routes\ordensTransporte.routes.js:24:router.post(
+> src\modules\transporte\routes\ordensTransporte.routes.js:25:    '/ordens/:id/vouchers/:voucherId/entrega',
+> src\modules\transporte\routes\ordensTransporte.routes.js:26:    postEntregaVoucherTransporte
+  src\modules\transporte\routes\ordensTransporte.routes.js:27:);
+  src\modules\transporte\routes\ordensTransporte.routes.js:28:
+  src\modules\transporte\routes\ordensTransporte.routes.js:29:router.post(
+> src\modules\transporte\routes\ordensTransporte.routes.js:30:    '/ordens/:id/vouchers/segunda-via',
+> src\modules\transporte\routes\ordensTransporte.routes.js:31:    postSegundaViaVoucherTransporte
+  src\modules\transporte\routes\ordensTransporte.routes.js:32:);
+  src\modules\transporte\routes\ordensTransporte.routes.js:33:
+  src\modules\transporte\routes\ordensTransporte.routes.js:34:export default router;
+  src\modules\transporte\services\ordensTransporte.service.js:25:
+> src\modules\transporte\services\ordensTransporte.service.js:26:function codigoVoucher() {
+  src\modules\transporte\services\ordensTransporte.service.js:27:    return 
+`VT-${randomBytes(16).toString('hex').toUpperCase()}`;
+  src\modules\transporte\services\ordensTransporte.service.js:28:}
+  src\modules\transporte\services\ordensTransporte.service.js:29:
+  src\modules\transporte\services\ordensTransporte.service.js:315:            error: erro(
+> src\modules\transporte\services\ordensTransporte.service.js:316:                'A validade do voucher precisa ser 
+uma data válida igual ou posterior à data atual.'
+  src\modules\transporte\services\ordensTransporte.service.js:317:            )
+  src\modules\transporte\services\ordensTransporte.service.js:318:        };
+  src\modules\transporte\services\ordensTransporte.service.js:319:    }
+  src\modules\transporte\services\ordensTransporte.service.js:380:
+> src\modules\transporte\services\ordensTransporte.service.js:381:    const { data: voucher, error: voucherError } = 
+await supabaseAdmin
+> src\modules\transporte\services\ordensTransporte.service.js:382:        .from('ordem_transporte_vouchers')
+  src\modules\transporte\services\ordensTransporte.service.js:383:        .insert({
+  src\modules\transporte\services\ordensTransporte.service.js:384:            ordem_transporte_id: ordem.id,
+  src\modules\transporte\services\ordensTransporte.service.js:385:            numero_via: 1,
+  src\modules\transporte\services\ordensTransporte.service.js:386:            tipo_via: 'original',
+> src\modules\transporte\services\ordensTransporte.service.js:387:            codigo: codigoVoucher(),
+  src\modules\transporte\services\ordensTransporte.service.js:388:            emitido_por: emitidoPor
+  src\modules\transporte\services\ordensTransporte.service.js:389:        })
+  src\modules\transporte\services\ordensTransporte.service.js:390:        .select('*')
+  src\modules\transporte\services\ordensTransporte.service.js:392:
+> src\modules\transporte\services\ordensTransporte.service.js:393:    if (voucherError) {
+  src\modules\transporte\services\ordensTransporte.service.js:394:        const { error: cancelamentoError } = await 
+supabaseAdmin
+  src\modules\transporte\services\ordensTransporte.service.js:395:            .from('ordens_transporte')
+  src\modules\transporte\services\ordensTransporte.service.js:396:            .update({
+  src\modules\transporte\services\ordensTransporte.service.js:400:                    ordem.observacoes,
+> src\modules\transporte\services\ordensTransporte.service.js:401:                    'Cancelada automaticamente: falha 
+ao registrar o voucher original.'
+  src\modules\transporte\services\ordensTransporte.service.js:402:                ].filter(Boolean).join('\n')
+  src\modules\transporte\services\ordensTransporte.service.js:403:            })
+  src\modules\transporte\services\ordensTransporte.service.js:404:            .eq('id', ordem.id)
+  src\modules\transporte\services\ordensTransporte.service.js:411:                    cancelamentoError
+> src\modules\transporte\services\ordensTransporte.service.js:412:                        ? 'Falha ao criar o voucher e 
+ao cancelar a OT. Verifique o registro antes de tentar novamente.'
+> src\modules\transporte\services\ordensTransporte.service.js:413:                        : 'A OT foi cancelada porque 
+não foi possível registrar o voucher. Verifique o histórico antes de tentar novamente.',
+> src\modules\transporte\services\ordensTransporte.service.js:414:                    'FALHA_AO_CRIAR_VOUCHER'
+  src\modules\transporte\services\ordensTransporte.service.js:415:                ),
+> src\modules\transporte\services\ordensTransporte.service.js:416:                detalhes: voucherError.message,
+  src\modules\transporte\services\ordensTransporte.service.js:417:                erroCancelamento: 
+cancelamentoError?.message || null,
+  src\modules\transporte\services\ordensTransporte.service.js:418:                ordemId: ordem.id
+  src\modules\transporte\services\ordensTransporte.service.js:419:            }
+  src\modules\transporte\services\ordensTransporte.service.js:425:            ...ordem,
+> src\modules\transporte\services\ordensTransporte.service.js:426:            vouchers: [voucher],
+  src\modules\transporte\services\ordensTransporte.service.js:427:            paciente: { id: 
+contexto.cotacao.paciente_id },
+  src\modules\transporte\services\ordensTransporte.service.js:428:            fornecedor: contexto.fornecedor
+  src\modules\transporte\services\ordensTransporte.service.js:429:        },
+  src\modules\transporte\services\ordensTransporte.service.js:433:
+> src\modules\transporte\services\ordensTransporte.service.js:434:export async function 
+buscarVoucherTransporte(ordemId, voucherId) {
+> src\modules\transporte\services\ordensTransporte.service.js:435:    if (!ordemId || !voucherId) {
+  src\modules\transporte\services\ordensTransporte.service.js:436:        return {
+  src\modules\transporte\services\ordensTransporte.service.js:437:            data: null,
+> src\modules\transporte\services\ordensTransporte.service.js:438:            error: erro('Ordem de Transporte e 
+voucher são obrigatórios.')
+  src\modules\transporte\services\ordensTransporte.service.js:439:        };
+  src\modules\transporte\services\ordensTransporte.service.js:440:    }
+  src\modules\transporte\services\ordensTransporte.service.js:441:
+  src\modules\transporte\services\ordensTransporte.service.js:455:            error: erro(
+> src\modules\transporte\services\ordensTransporte.service.js:456:                'Ordem de Transporte não encontrada.',
+  src\modules\transporte\services\ordensTransporte.service.js:457:                'OT_NAO_ENCONTRADA'
+  src\modules\transporte\services\ordensTransporte.service.js:458:            )
+  src\modules\transporte\services\ordensTransporte.service.js:459:        };
+  src\modules\transporte\services\ordensTransporte.service.js:461:
+> src\modules\transporte\services\ordensTransporte.service.js:462:    const { data: voucher, error: voucherError } = 
+await supabaseAdmin
+> src\modules\transporte\services\ordensTransporte.service.js:463:        .from('ordem_transporte_vouchers')
+  src\modules\transporte\services\ordensTransporte.service.js:464:        .select('*')
+> src\modules\transporte\services\ordensTransporte.service.js:465:        .eq('id', voucherId)
+  src\modules\transporte\services\ordensTransporte.service.js:466:        .eq('ordem_transporte_id', ordemId)
+  src\modules\transporte\services\ordensTransporte.service.js:467:        .maybeSingle();
+  src\modules\transporte\services\ordensTransporte.service.js:468:
+> src\modules\transporte\services\ordensTransporte.service.js:469:    if (voucherError) {
+> src\modules\transporte\services\ordensTransporte.service.js:470:        return { data: null, error: voucherError };
+  src\modules\transporte\services\ordensTransporte.service.js:471:    }
+  src\modules\transporte\services\ordensTransporte.service.js:472:
+> src\modules\transporte\services\ordensTransporte.service.js:473:    if (!voucher) {
+  src\modules\transporte\services\ordensTransporte.service.js:474:        return {
+  src\modules\transporte\services\ordensTransporte.service.js:475:            data: null,
+  src\modules\transporte\services\ordensTransporte.service.js:476:            error: erro(
+> src\modules\transporte\services\ordensTransporte.service.js:477:                'Voucher não encontrado para esta 
+OT.',
+> src\modules\transporte\services\ordensTransporte.service.js:478:                'VOUCHER_NAO_ENCONTRADO'
+  src\modules\transporte\services\ordensTransporte.service.js:479:            )
+  src\modules\transporte\services\ordensTransporte.service.js:480:        };
+  src\modules\transporte\services\ordensTransporte.service.js:481:    }
+  src\modules\transporte\services\ordensTransporte.service.js:511:            fornecedor: fornecedor || { id: 
+ordem.fornecedor_id },
+> src\modules\transporte\services\ordensTransporte.service.js:512:            voucher
+  src\modules\transporte\services\ordensTransporte.service.js:513:        },
+  src\modules\transporte\services\ordensTransporte.service.js:514:        error: null
+  src\modules\transporte\services\ordensTransporte.service.js:515:    };
+  src\modules\transporte\services\ordensTransporte.service.js:517:
+> src\modules\transporte\services\ordensTransporte.service.js:518:export async function 
+registrarEntregaVoucherTransporte({
+  src\modules\transporte\services\ordensTransporte.service.js:519:    ordemId,
+> src\modules\transporte\services\ordensTransporte.service.js:520:    voucherId,
+  src\modules\transporte\services\ordensTransporte.service.js:521:    entreguePor,
+  src\modules\transporte\services\ordensTransporte.service.js:522:    destinatario
+  src\modules\transporte\services\ordensTransporte.service.js:523:}) {
+> src\modules\transporte\services\ordensTransporte.service.js:524:    if (!ordemId || !voucherId || !entreguePor) {
+  src\modules\transporte\services\ordensTransporte.service.js:525:        return {
+  src\modules\transporte\services\ordensTransporte.service.js:526:            data: null,
+  src\modules\transporte\services\ordensTransporte.service.js:527:            error: erro(
+> src\modules\transporte\services\ordensTransporte.service.js:528:                'Ordem, voucher e usuário responsável 
+são obrigatórios.'
+  src\modules\transporte\services\ordensTransporte.service.js:529:            )
+  src\modules\transporte\services\ordensTransporte.service.js:530:        };
+  src\modules\transporte\services\ordensTransporte.service.js:531:    }
+  src\modules\transporte\services\ordensTransporte.service.js:543:    const { data, error: dbError } = await 
+supabaseAdmin.rpc(
+> src\modules\transporte\services\ordensTransporte.service.js:544:        'registrar_entrega_voucher_transporte',
+  src\modules\transporte\services\ordensTransporte.service.js:545:        {
+  src\modules\transporte\services\ordensTransporte.service.js:546:            p_ordem_id: ordemId,
+> src\modules\transporte\services\ordensTransporte.service.js:547:            p_voucher_id: voucherId,
+  src\modules\transporte\services\ordensTransporte.service.js:548:            p_entregue_por: entreguePor,
+  src\modules\transporte\services\ordensTransporte.service.js:549:            p_destinatario: destinatario.trim()
+  src\modules\transporte\services\ordensTransporte.service.js:550:        }
+  src\modules\transporte\services\ordensTransporte.service.js:559:            'OT_NAO_ENCONTRADA',
+> src\modules\transporte\services\ordensTransporte.service.js:560:            'VOUCHER_NAO_ENCONTRADO',
+  src\modules\transporte\services\ordensTransporte.service.js:561:            'OT_NAO_PODE_SER_ENTREGUE',
+  src\modules\transporte\services\ordensTransporte.service.js:562:            'OT_VENCIDA',
+> src\modules\transporte\services\ordensTransporte.service.js:563:            'VOUCHER_JA_ENTREGUE'
+  src\modules\transporte\services\ordensTransporte.service.js:564:        ];
+  src\modules\transporte\services\ordensTransporte.service.js:565:
+  src\modules\transporte\services\ordensTransporte.service.js:566:        const codigo = codigos.find(c => 
+mensagem.includes(c));
+  src\modules\transporte\services\ordensTransporte.service.js:574:                        DESTINATARIO_OBRIGATORIO: 'O 
+destinatário é obrigatório.',
+> src\modules\transporte\services\ordensTransporte.service.js:575:                        OT_NAO_ENCONTRADA: 'Ordem de 
+Transporte não encontrada.',
+> src\modules\transporte\services\ordensTransporte.service.js:576:                        VOUCHER_NAO_ENCONTRADO: 
+'Voucher não encontrado para esta OT.',
+  src\modules\transporte\services\ordensTransporte.service.js:577:                        OT_NAO_PODE_SER_ENTREGUE: 'A 
+OT não está em um estado que permita registrar a entrega.',
+  src\modules\transporte\services\ordensTransporte.service.js:578:                        OT_VENCIDA: 'A validade da OT 
+expirou.',
+> src\modules\transporte\services\ordensTransporte.service.js:579:                        VOUCHER_JA_ENTREGUE: 'Este 
+voucher já foi entregue.'
+  src\modules\transporte\services\ordensTransporte.service.js:580:                    })[codigo]
+> src\modules\transporte\services\ordensTransporte.service.js:581:                    : 'Não foi possível registrar a 
+entrega do voucher.',
+  src\modules\transporte\services\ordensTransporte.service.js:582:                codigo || 'ERRO_REGISTRO_ENTREGA'
+  src\modules\transporte\services\ordensTransporte.service.js:583:            )
+  src\modules\transporte\services\ordensTransporte.service.js:584:        };
+  src\modules\transporte\services\ordensTransporte.service.js:589:
+> src\modules\transporte\services\ordensTransporte.service.js:590:export async function 
+gerarSegundaViaVoucherTransporte({
+  src\modules\transporte\services\ordensTransporte.service.js:591:    ordemId,
+  src\modules\transporte\services\ordensTransporte.service.js:592:    emitidoPor
+  src\modules\transporte\services\ordensTransporte.service.js:593:}) {
+  src\modules\transporte\services\ordensTransporte.service.js:597:            error: erro(
+> src\modules\transporte\services\ordensTransporte.service.js:598:                'Ordem de Transporte e usuário 
+emissor são obrigatórios.',
+  src\modules\transporte\services\ordensTransporte.service.js:599:                'DADOS_OBRIGATORIOS'
+  src\modules\transporte\services\ordensTransporte.service.js:600:            )
+  src\modules\transporte\services\ordensTransporte.service.js:601:        };
+  src\modules\transporte\services\ordensTransporte.service.js:604:    const { data, error: dbError } = await 
+supabaseAdmin.rpc(
+> src\modules\transporte\services\ordensTransporte.service.js:605:        'gerar_segunda_via_voucher_transporte',
+  src\modules\transporte\services\ordensTransporte.service.js:606:        {
+  src\modules\transporte\services\ordensTransporte.service.js:607:            p_ordem_id: ordemId,
+  src\modules\transporte\services\ordensTransporte.service.js:608:            p_emitido_por: emitidoPor
+  src\modules\transporte\services\ordensTransporte.service.js:616:            OT_NAO_ENCONTRADA: {
+> src\modules\transporte\services\ordensTransporte.service.js:617:                mensagem: 'Ordem de Transporte não 
+encontrada.',
+  src\modules\transporte\services\ordensTransporte.service.js:618:                codigo: 'OT_NAO_ENCONTRADA'
+  src\modules\transporte\services\ordensTransporte.service.js:619:            },
+  src\modules\transporte\services\ordensTransporte.service.js:620:            OT_NAO_PERMITE_SEGUNDA_VIA: {
+  src\modules\transporte\services\ordensTransporte.service.js:653:            error: erro(
+> src\modules\transporte\services\ordensTransporte.service.js:654:                'Não foi possível emitir a segunda 
+via do voucher.',
+  src\modules\transporte\services\ordensTransporte.service.js:655:                'ERRO_SEGUNDA_VIA'
+  src\modules\transporte\services\ordensTransporte.service.js:656:            )
+  src\modules\transporte\services\ordensTransporte.service.js:657:        };
+  src\modules\transporte\services\ordensTransporte.service.js:659:
+> src\modules\transporte\services\ordensTransporte.service.js:660:    if (!data?.ordem || !data?.voucher) {
+  src\modules\transporte\services\ordensTransporte.service.js:661:        return {
+  src\modules\transporte\services\ordensTransporte.service.js:662:            data: null,
+  src\modules\transporte\services\ordensTransporte.service.js:663:            error: erro(
+  src\modules\transporte\services\ordensTransporte.service.js:672:            ...data.ordem,
+> src\modules\transporte\services\ordensTransporte.service.js:673:            voucher: data.voucher
+  src\modules\transporte\services\ordensTransporte.service.js:674:        },
+  src\modules\transporte\services\ordensTransporte.service.js:675:        error: null
+  src\modules\transporte\services\ordensTransporte.service.js:676:    };
+  src\modules\transporte\services\voucher-transporte-pdf.service.js:41:
+> src\modules\transporte\services\voucher-transporte-pdf.service.js:42:function montarLinhasVoucher(ordem, voucher) {
+  src\modules\transporte\services\voucher-transporte-pdf.service.js:43:    const fornecedor = ordem.fornecedor || 
+ordem.fornecedores || {};
+  src\modules\transporte\services\voucher-transporte-pdf.service.js:44:    const paciente = ordem.paciente || 
+ordem.pacientes || {};
+  src\modules\transporte\services\voucher-transporte-pdf.service.js:45:
+  src\modules\transporte\services\voucher-transporte-pdf.service.js:46:    return [
+> src\modules\transporte\services\voucher-transporte-pdf.service.js:47:        'VOUCHER DE TRANSPORTE - ABASTECIMENTO',
+  src\modules\transporte\services\voucher-transporte-pdf.service.js:48:        '',
+> src\modules\transporte\services\voucher-transporte-pdf.service.js:49:        `Ordem de Transporte: ${ordem.numero || 
+ordem.id || '-'}`,
+> src\modules\transporte\services\voucher-transporte-pdf.service.js:50:        `Codigo do voucher: ${voucher.codigo || 
+'-'}`,
+> src\modules\transporte\services\voucher-transporte-pdf.service.js:51:        `Via: ${voucher.tipo_via === 
+'segunda_via' ? 'SEGUNDA VIA' : 'ORIGINAL'} (${voucher.numero_via || 1})`,
+  src\modules\transporte\services\voucher-transporte-pdf.service.js:52:        '',
+  src\modules\transporte\services\voucher-transporte-pdf.service.js:53:        'DADOS DO BENEFICIARIO',
+  src\modules\transporte\services\voucher-transporte-pdf.service.js:54:        `Paciente: ${paciente.nome || 
+ordem.paciente_nome || '-'}`,
+  src\modules\transporte\services\voucher-transporte-pdf.service.js:68:        '',
+> src\modules\transporte\services\voucher-transporte-pdf.service.js:69:        'Apresente este voucher ao responsavel 
+pelo abastecimento.',
+> src\modules\transporte\services\voucher-transporte-pdf.service.js:70:        'A entrega do voucher nao comprova a 
+utilizacao do combustivel.',
+  src\modules\transporte\services\voucher-transporte-pdf.service.js:71:        ...(ordem.observacoes
+  src\modules\transporte\services\voucher-transporte-pdf.service.js:72:            ? ['', 'OBSERVACOES', 
+...quebrarLinha(ordem.observacoes)]
+  src\modules\transporte\services\voucher-transporte-pdf.service.js:73:            : [])
+  src\modules\transporte\services\voucher-transporte-pdf.service.js:89:
+> src\modules\transporte\services\voucher-transporte-pdf.service.js:90:export function buildVoucherTransportePdf(ordem, 
+voucher) {
+> src\modules\transporte\services\voucher-transporte-pdf.service.js:91:    const content = 
+montarConteudo(montarLinhasVoucher(ordem, voucher));
+  src\modules\transporte\services\voucher-transporte-pdf.service.js:92:
+  src\modules\transporte\services\voucher-transporte-pdf.service.js:93:    const objetos = [
+  src\modules\transporte\services\voucher-transporte-pdf.service.js:94:        '<< /Type /Catalog /Pages 2 0 R >>',
+  src\modules\transporte\services\voucher-transporte-pdf.service.js:124:
+> src\modules\transporte\services\voucher-transporte-pdf.service.js:125:export function 
+nomeArquivoVoucherTransporte(ordem, voucher) {
+  src\modules\transporte\services\voucher-transporte-pdf.service.js:126:    const numero = ordem?.numero || ordem?.id 
+|| 'ordem-transporte';
+> src\modules\transporte\services\voucher-transporte-pdf.service.js:127:    const via = voucher?.numero_via || 1;
+  src\modules\transporte\services\voucher-transporte-pdf.service.js:128:
+> src\modules\transporte\services\voucher-transporte-pdf.service.js:129:    return `${numero}-voucher-via-${via}.pdf`;
+  src\modules\transporte\services\voucher-transporte-pdf.service.js:130:}
+  tests\fornecimento-finalizacao.controller.test.js:13:    atualizarObservacoesOrdemDeFornecimento: jest.fn(),
+> tests\fornecimento-finalizacao.controller.test.js:14:    finalizarOrdemDeFornecimento: jest.fn()
+  tests\fornecimento-finalizacao.controller.test.js:15:}
+  tests\fornecimento-finalizacao.controller.test.js:16:
+  tests\fornecimento-finalizacao.controller.test.js:17:const auditoria = {
+  tests\fornecimento-finalizacao.service.test.js:119:
+> tests\fornecimento-finalizacao.service.test.js:120:const { finalizarOrdemDeFornecimento } = await import(
+  tests\fornecimento-finalizacao.service.test.js:121:    '../src/modules/fornecimento/services/fornecimento.services.js'
+  tests\fornecimento-finalizacao.service.test.js:122:);
+  tests\fornecimento-finalizacao.service.test.js:123:
+  tests\fornecimento-finalizacao.service.test.js:144:
+> tests\fornecimento-finalizacao.service.test.js:145:        const resultado = await finalizarOrdemDeFornecimento({
+  tests\fornecimento-finalizacao.service.test.js:146:            id: 'of-1',
+  tests\fornecimento-finalizacao.service.test.js:147:            atualizadoPor: 'operador-1'
+  tests\fornecimento-finalizacao.service.test.js:148:        });
+  tests\fornecimento-finalizacao.service.test.js:157:
+> tests\fornecimento-finalizacao.service.test.js:158:        const resultado = await finalizarOrdemDeFornecimento({
+  tests\fornecimento-finalizacao.service.test.js:159:            id: 'of-1',
+  tests\fornecimento-finalizacao.service.test.js:160:            atualizadoPor: 'operador-1'
+  tests\fornecimento-finalizacao.service.test.js:161:        });
+  tests\fornecimento-finalizacao.service.test.js:170:
+> tests\fornecimento-finalizacao.service.test.js:171:        const resultado = await finalizarOrdemDeFornecimento({
+  tests\fornecimento-finalizacao.service.test.js:172:            id: 'of-1',
+  tests\fornecimento-finalizacao.service.test.js:173:            atualizadoPor: 'operador-1'
+  tests\fornecimento-finalizacao.service.test.js:174:        });
+  tests\fornecimento-finalizacao.service.test.js:184:
+> tests\fornecimento-finalizacao.service.test.js:185:        const resultado = await finalizarOrdemDeFornecimento({
+  tests\fornecimento-finalizacao.service.test.js:186:            id: 'of-1',
+  tests\fornecimento-finalizacao.service.test.js:187:            atualizadoPor: 'operador-1'
+  tests\fornecimento-finalizacao.service.test.js:188:        });
+  tests\fornecimento-finalizacao.service.test.js:194:
+> tests\fornecimento-finalizacao.service.test.js:195:    it('tenta finalizar uma ordem quando todos os itens foram 
+entregues', async () => {
+> tests\fornecimento-finalizacao.service.test.js:196:       const resultado = await finalizarOrdemDeFornecimento({
+  tests\fornecimento-finalizacao.service.test.js:197:    id: 'of-1',
+  tests\fornecimento-finalizacao.service.test.js:198:    atualizadoPor: 'operador-1',
+  tests\fornecimento-finalizacao.service.test.js:199:    enviarRecibo: jest.fn().mockResolvedValue({
+  tests\fornecimento-recebimento.controller.test.js:11:    atualizarStatusPrazoOrdem: jest.fn(),
+> tests\fornecimento-recebimento.controller.test.js:12:    finalizarOrdemDeFornecimento: jest.fn(),
+  tests\fornecimento-recebimento.controller.test.js:13:    atualizarObservacoesOrdemDeFornecimento: jest.fn()
+  tests\fornecimento-recebimento.controller.test.js:14:};
+  tests\fornecimento-recebimento.controller.test.js:15:
+  tests\ordens-transporte.controller.test.js:4:const emitirOrdemDeTransporte = jest.fn();
+> tests\ordens-transporte.controller.test.js:5:const buscarVoucherTransporte = jest.fn();
+> tests\ordens-transporte.controller.test.js:6:const registrarEntregaVoucherTransporte = jest.fn();
+> tests\ordens-transporte.controller.test.js:7:const gerarSegundaViaVoucherTransporte = jest.fn();
+  tests\ordens-transporte.controller.test.js:8:
+> tests\ordens-transporte.controller.test.js:9:const buildVoucherTransportePdf = jest.fn();
+> tests\ordens-transporte.controller.test.js:10:const nomeArquivoVoucherTransporte = jest.fn();
+  tests\ordens-transporte.controller.test.js:11:
+  tests\ordens-transporte.controller.test.js:12:jest.unstable_mockModule(
+  tests\ordens-transporte.controller.test.js:13:    '../src/modules/transporte/services/ordensTransporte.service.js',
+  tests\ordens-transporte.controller.test.js:15:        emitirOrdemDeTransporte,
+> tests\ordens-transporte.controller.test.js:16:        buscarVoucherTransporte,
+> tests\ordens-transporte.controller.test.js:17:        registrarEntregaVoucherTransporte,
+> tests\ordens-transporte.controller.test.js:18:        gerarSegundaViaVoucherTransporte
+  tests\ordens-transporte.controller.test.js:19:    })
+  tests\ordens-transporte.controller.test.js:20:);
+  tests\ordens-transporte.controller.test.js:21:
+  tests\ordens-transporte.controller.test.js:22:jest.unstable_mockModule(
+> tests\ordens-transporte.controller.test.js:23:    
+'../src/modules/transporte/services/voucher-transporte-pdf.service.js',
+  tests\ordens-transporte.controller.test.js:24:    () => ({
+> tests\ordens-transporte.controller.test.js:25:        buildVoucherTransportePdf,
+> tests\ordens-transporte.controller.test.js:26:        nomeArquivoVoucherTransporte
+  tests\ordens-transporte.controller.test.js:27:    })
+  tests\ordens-transporte.controller.test.js:28:);
+  tests\ordens-transporte.controller.test.js:29:
+  tests\ordens-transporte.controller.test.js:31:    postOrdemTransporte,
+> tests\ordens-transporte.controller.test.js:32:    getVoucherTransportePdf,
+> tests\ordens-transporte.controller.test.js:33:    postEntregaVoucherTransporte,
+> tests\ordens-transporte.controller.test.js:34:    postSegundaViaVoucherTransporte
+  tests\ordens-transporte.controller.test.js:35:} = await import(
+  tests\ordens-transporte.controller.test.js:36:    
+'../src/modules/transporte/controllers/ordensTransporte.controller.js'
+  tests\ordens-transporte.controller.test.js:37:);
+  tests\ordens-transporte.controller.test.js:53:
+> tests\ordens-transporte.controller.test.js:54:describe('RF_F11 - controller de Ordem de Transporte', () => {
+  tests\ordens-transporte.controller.test.js:55:    beforeEach(() => {
+  tests\ordens-transporte.controller.test.js:56:        jest.clearAllMocks();
+  tests\ordens-transporte.controller.test.js:57:    });
+  tests\ordens-transporte.controller.test.js:173:            numero: 'OT-TESTE',
+> tests\ordens-transporte.controller.test.js:174:            voucher: {
+> tests\ordens-transporte.controller.test.js:175:                id: 'voucher-1',
+  tests\ordens-transporte.controller.test.js:176:                numero_via: 1,
+  tests\ordens-transporte.controller.test.js:177:                tipo_via: 'original'
+  tests\ordens-transporte.controller.test.js:178:            }
+  tests\ordens-transporte.controller.test.js:182:
+> tests\ordens-transporte.controller.test.js:183:        buscarVoucherTransporte.mockResolvedValue({
+  tests\ordens-transporte.controller.test.js:184:            data: dados,
+  tests\ordens-transporte.controller.test.js:185:            error: null
+  tests\ordens-transporte.controller.test.js:186:        });
+  tests\ordens-transporte.controller.test.js:187:
+> tests\ordens-transporte.controller.test.js:188:        buildVoucherTransportePdf.mockReturnValue(pdf);
+  tests\ordens-transporte.controller.test.js:189:
+> tests\ordens-transporte.controller.test.js:190:        nomeArquivoVoucherTransporte.mockReturnValue(
+> tests\ordens-transporte.controller.test.js:191:            'OT-TESTE-voucher-via-1.pdf'
+  tests\ordens-transporte.controller.test.js:192:        );
+  tests\ordens-transporte.controller.test.js:193:
+  tests\ordens-transporte.controller.test.js:194:        const req = {
+  tests\ordens-transporte.controller.test.js:196:                id: 'ot-1',
+> tests\ordens-transporte.controller.test.js:197:                voucherId: 'voucher-1'
+  tests\ordens-transporte.controller.test.js:198:            }
+  tests\ordens-transporte.controller.test.js:199:        };
+  tests\ordens-transporte.controller.test.js:200:
+  tests\ordens-transporte.controller.test.js:202:
+> tests\ordens-transporte.controller.test.js:203:        await getVoucherTransportePdf(req, res);
+  tests\ordens-transporte.controller.test.js:204:
+  tests\ordens-transporte.controller.test.js:205:        expect(res.setHeader).toHaveBeenCalledWith(
+  tests\ordens-transporte.controller.test.js:206:            'Content-Type',
+  tests\ordens-transporte.controller.test.js:211:            'Content-Disposition',
+> tests\ordens-transporte.controller.test.js:212:            'attachment; filename="OT-TESTE-voucher-via-1.pdf"'
+  tests\ordens-transporte.controller.test.js:213:        );
+  tests\ordens-transporte.controller.test.js:214:
+  tests\ordens-transporte.controller.test.js:215:        expect(res.status).toHaveBeenCalledWith(200);
+  tests\ordens-transporte.controller.test.js:218:
+> tests\ordens-transporte.controller.test.js:219:    it('retorna 404 quando o voucher não existe', async () => {
+> tests\ordens-transporte.controller.test.js:220:        buscarVoucherTransporte.mockResolvedValue({
+  tests\ordens-transporte.controller.test.js:221:            data: null,
+  tests\ordens-transporte.controller.test.js:222:            error: {
+> tests\ordens-transporte.controller.test.js:223:                code: 'VOUCHER_NAO_ENCONTRADO',
+> tests\ordens-transporte.controller.test.js:224:                message: 'Voucher não encontrado para esta OT.'
+  tests\ordens-transporte.controller.test.js:225:            }
+  tests\ordens-transporte.controller.test.js:226:        });
+  tests\ordens-transporte.controller.test.js:227:
+  tests\ordens-transporte.controller.test.js:230:                id: 'ot-1',
+> tests\ordens-transporte.controller.test.js:231:                voucherId: 'inexistente'
+  tests\ordens-transporte.controller.test.js:232:            }
+  tests\ordens-transporte.controller.test.js:233:        };
+  tests\ordens-transporte.controller.test.js:234:
+  tests\ordens-transporte.controller.test.js:236:
+> tests\ordens-transporte.controller.test.js:237:        await getVoucherTransportePdf(req, res);
+  tests\ordens-transporte.controller.test.js:238:
+  tests\ordens-transporte.controller.test.js:239:        expect(res.status).toHaveBeenCalledWith(404);
+  tests\ordens-transporte.controller.test.js:240:
+  tests\ordens-transporte.controller.test.js:241:        expect(res.json).toHaveBeenCalledWith({
+> tests\ordens-transporte.controller.test.js:242:            erro: 'Voucher não encontrado para esta OT.'
+  tests\ordens-transporte.controller.test.js:243:        });
+  tests\ordens-transporte.controller.test.js:244:    });
+  tests\ordens-transporte.controller.test.js:245:
+> tests\ordens-transporte.controller.test.js:246:    it('registra a entrega do voucher e retorna 200', async () => {
+  tests\ordens-transporte.controller.test.js:247:        const resultado = {
+  tests\ordens-transporte.controller.test.js:248:            ordem: {
+  tests\ordens-transporte.controller.test.js:249:                id: 'ot-1',
+  tests\ordens-transporte.controller.test.js:251:            },
+> tests\ordens-transporte.controller.test.js:252:            voucher: {
+> tests\ordens-transporte.controller.test.js:253:                id: 'voucher-1',
+  tests\ordens-transporte.controller.test.js:254:                destinatario: 'Lucas'
+  tests\ordens-transporte.controller.test.js:255:            }
+  tests\ordens-transporte.controller.test.js:256:        };
+  tests\ordens-transporte.controller.test.js:257:
+> tests\ordens-transporte.controller.test.js:258:        registrarEntregaVoucherTransporte.mockResolvedValue({
+  tests\ordens-transporte.controller.test.js:259:            data: resultado,
+  tests\ordens-transporte.controller.test.js:260:            error: null
+  tests\ordens-transporte.controller.test.js:261:        });
+  tests\ordens-transporte.controller.test.js:266:                id: 'ot-1',
+> tests\ordens-transporte.controller.test.js:267:                voucherId: 'voucher-1'
+  tests\ordens-transporte.controller.test.js:268:            },
+  tests\ordens-transporte.controller.test.js:269:            body: {
+  tests\ordens-transporte.controller.test.js:270:                destinatario: 'Lucas'
+  tests\ordens-transporte.controller.test.js:275:
+> tests\ordens-transporte.controller.test.js:276:        await postEntregaVoucherTransporte(req, res);
+  tests\ordens-transporte.controller.test.js:277:
+> tests\ordens-transporte.controller.test.js:278:        
+expect(registrarEntregaVoucherTransporte).toHaveBeenCalledWith({
+  tests\ordens-transporte.controller.test.js:279:            ordemId: 'ot-1',
+> tests\ordens-transporte.controller.test.js:280:            voucherId: 'voucher-1',
+  tests\ordens-transporte.controller.test.js:281:            entreguePor: 'usuario-1',
+  tests\ordens-transporte.controller.test.js:282:            destinatario: 'Lucas'
+  tests\ordens-transporte.controller.test.js:283:        });
+  tests\ordens-transporte.controller.test.js:288:
+> tests\ordens-transporte.controller.test.js:289:    it('retorna 409 quando o voucher já foi entregue', async () => {
+> tests\ordens-transporte.controller.test.js:290:        registrarEntregaVoucherTransporte.mockResolvedValue({
+  tests\ordens-transporte.controller.test.js:291:            data: null,
+  tests\ordens-transporte.controller.test.js:292:            error: {
+> tests\ordens-transporte.controller.test.js:293:                code: 'VOUCHER_JA_ENTREGUE',
+> tests\ordens-transporte.controller.test.js:294:                message: 'Este voucher já foi entregue.'
+  tests\ordens-transporte.controller.test.js:295:            }
+  tests\ordens-transporte.controller.test.js:296:        });
+  tests\ordens-transporte.controller.test.js:297:
+  tests\ordens-transporte.controller.test.js:301:                id: 'ot-1',
+> tests\ordens-transporte.controller.test.js:302:                voucherId: 'voucher-1'
+  tests\ordens-transporte.controller.test.js:303:            },
+  tests\ordens-transporte.controller.test.js:304:            body: {
+  tests\ordens-transporte.controller.test.js:305:                destinatario: 'Lucas'
+  tests\ordens-transporte.controller.test.js:310:
+> tests\ordens-transporte.controller.test.js:311:        await postEntregaVoucherTransporte(req, res);
+  tests\ordens-transporte.controller.test.js:312:
+  tests\ordens-transporte.controller.test.js:313:        expect(res.status).toHaveBeenCalledWith(409);
+  tests\ordens-transporte.controller.test.js:314:    });
+  tests\ordens-transporte.controller.test.js:320:            status: 'entregue',
+> tests\ordens-transporte.controller.test.js:321:            voucher: {
+> tests\ordens-transporte.controller.test.js:322:                id: 'voucher-2',
+  tests\ordens-transporte.controller.test.js:323:                numero_via: 2,
+  tests\ordens-transporte.controller.test.js:324:                tipo_via: 'segunda_via',
+  tests\ordens-transporte.controller.test.js:325:                codigo: 'VT-SEGUNDA'
+  tests\ordens-transporte.controller.test.js:328:
+> tests\ordens-transporte.controller.test.js:329:        gerarSegundaViaVoucherTransporte.mockResolvedValue({
+  tests\ordens-transporte.controller.test.js:330:            data: resultado,
+  tests\ordens-transporte.controller.test.js:331:            error: null
+  tests\ordens-transporte.controller.test.js:332:        });
+  tests\ordens-transporte.controller.test.js:340:
+> tests\ordens-transporte.controller.test.js:341:        await postSegundaViaVoucherTransporte(req, res);
+  tests\ordens-transporte.controller.test.js:342:
+> tests\ordens-transporte.controller.test.js:343:        expect(gerarSegundaViaVoucherTransporte).toHaveBeenCalledWith({
+  tests\ordens-transporte.controller.test.js:344:            ordemId: 'ot-1',
+  tests\ordens-transporte.controller.test.js:345:            emitidoPor: 'usuario-1'
+  tests\ordens-transporte.controller.test.js:346:        });
+  tests\ordens-transporte.controller.test.js:352:    it('retorna 404 quando a OT da segunda via não existe', async () 
+=> {
+> tests\ordens-transporte.controller.test.js:353:        gerarSegundaViaVoucherTransporte.mockResolvedValue({
+  tests\ordens-transporte.controller.test.js:354:            data: null,
+  tests\ordens-transporte.controller.test.js:355:            error: {
+  tests\ordens-transporte.controller.test.js:356:                code: 'OT_NAO_ENCONTRADA',
+> tests\ordens-transporte.controller.test.js:357:                message: 'Ordem de Transporte não encontrada.'
+  tests\ordens-transporte.controller.test.js:358:            }
+  tests\ordens-transporte.controller.test.js:359:        });
+  tests\ordens-transporte.controller.test.js:360:
+  tests\ordens-transporte.controller.test.js:367:
+> tests\ordens-transporte.controller.test.js:368:        await postSegundaViaVoucherTransporte(req, res);
+  tests\ordens-transporte.controller.test.js:369:
+  tests\ordens-transporte.controller.test.js:370:        expect(res.status).toHaveBeenCalledWith(404);
+  tests\ordens-transporte.controller.test.js:371:        expect(res.json).toHaveBeenCalledWith({
+> tests\ordens-transporte.controller.test.js:372:            erro: 'Ordem de Transporte não encontrada.',
+  tests\ordens-transporte.controller.test.js:373:            codigo: 'OT_NAO_ENCONTRADA'
+  tests\ordens-transporte.controller.test.js:374:        });
+  tests\ordens-transporte.controller.test.js:375:    });
+  tests\ordens-transporte.controller.test.js:377:    it('retorna 409 quando a OT está vencida', async () => {
+> tests\ordens-transporte.controller.test.js:378:        gerarSegundaViaVoucherTransporte.mockResolvedValue({
+  tests\ordens-transporte.controller.test.js:379:            data: null,
+  tests\ordens-transporte.controller.test.js:380:            error: {
+  tests\ordens-transporte.controller.test.js:381:                code: 'OT_VENCIDA',
+  tests\ordens-transporte.controller.test.js:392:
+> tests\ordens-transporte.controller.test.js:393:        await postSegundaViaVoucherTransporte(req, res);
+  tests\ordens-transporte.controller.test.js:394:
+  tests\ordens-transporte.controller.test.js:395:        expect(res.status).toHaveBeenCalledWith(409);
+  tests\ordens-transporte.controller.test.js:396:    });
+  tests\ordens-transporte.controller.test.js:398:    it('retorna 409 quando o estado da OT não permite segunda via', 
+async () => {
+> tests\ordens-transporte.controller.test.js:399:        gerarSegundaViaVoucherTransporte.mockResolvedValue({
+  tests\ordens-transporte.controller.test.js:400:            data: null,
+  tests\ordens-transporte.controller.test.js:401:            error: {
+  tests\ordens-transporte.controller.test.js:402:                code: 'OT_NAO_PERMITE_SEGUNDA_VIA',
+  tests\ordens-transporte.controller.test.js:413:
+> tests\ordens-transporte.controller.test.js:414:        await postSegundaViaVoucherTransporte(req, res);
+  tests\ordens-transporte.controller.test.js:415:
+  tests\ordens-transporte.controller.test.js:416:        expect(res.status).toHaveBeenCalledWith(409);
+  tests\ordens-transporte.controller.test.js:417:    });
+  tests\ordens-transporte.controller.test.js:419:    it('retorna 500 se o serviço de segunda via lançar uma exceção', 
+async () => {
+> tests\ordens-transporte.controller.test.js:420:        gerarSegundaViaVoucherTransporte.mockRejectedValue(
+  tests\ordens-transporte.controller.test.js:421:            new Error('Falha inesperada')
+  tests\ordens-transporte.controller.test.js:422:        );
+  tests\ordens-transporte.controller.test.js:423:
+  tests\ordens-transporte.controller.test.js:435:        try {
+> tests\ordens-transporte.controller.test.js:436:            await postSegundaViaVoucherTransporte(req, res);
+  tests\ordens-transporte.controller.test.js:437:
+  tests\ordens-transporte.controller.test.js:438:            expect(res.status).toHaveBeenCalledWith(500);
+  tests\ordens-transporte.controller.test.js:439:        } finally {
+  tests\ordens-transporte.service.test.js:20:    emitirOrdemDeTransporte,
+> tests\ordens-transporte.service.test.js:21:    gerarSegundaViaVoucherTransporte
+  tests\ordens-transporte.service.test.js:22:} = await import(
+  tests\ordens-transporte.service.test.js:23:    '../src/modules/transporte/services/ordensTransporte.service.js'
+  tests\ordens-transporte.service.test.js:24:);
+  tests\ordens-transporte.service.test.js:25:
+> tests\ordens-transporte.service.test.js:26:describe('RF_F11 - validação da validade da OT', () => {
+  tests\ordens-transporte.service.test.js:27:    beforeEach(() => {
+  tests\ordens-transporte.service.test.js:28:        jest.clearAllMocks();
+  tests\ordens-transporte.service.test.js:29:    });
+  tests\ordens-transporte.service.test.js:84:
+> tests\ordens-transporte.service.test.js:85:describe('RF_F11 - geração de segunda via do voucher', () => {
+  tests\ordens-transporte.service.test.js:86:    beforeEach(() => {
+  tests\ordens-transporte.service.test.js:87:        jest.clearAllMocks();
+  tests\ordens-transporte.service.test.js:88:    });
+  tests\ordens-transporte.service.test.js:90:    it('rejeita a solicitação sem o ID da OT', async () => {
+> tests\ordens-transporte.service.test.js:91:        const resultado = await gerarSegundaViaVoucherTransporte({
+  tests\ordens-transporte.service.test.js:92:            ordemId: null,
+  tests\ordens-transporte.service.test.js:93:            emitidoPor: 'usuario-1'
+  tests\ordens-transporte.service.test.js:94:        });
+  tests\ordens-transporte.service.test.js:101:    it('rejeita a solicitação sem o usuário emissor', async () => {
+> tests\ordens-transporte.service.test.js:102:        const resultado = await gerarSegundaViaVoucherTransporte({
+  tests\ordens-transporte.service.test.js:103:            ordemId: 'ot-1',
+  tests\ordens-transporte.service.test.js:104:            emitidoPor: null
+  tests\ordens-transporte.service.test.js:105:        });
+  tests\ordens-transporte.service.test.js:118:
+> tests\ordens-transporte.service.test.js:119:        const voucher = {
+> tests\ordens-transporte.service.test.js:120:            id: 'voucher-2',
+  tests\ordens-transporte.service.test.js:121:            ordem_transporte_id: 'ot-1',
+  tests\ordens-transporte.service.test.js:122:            numero_via: 2,
+  tests\ordens-transporte.service.test.js:123:            tipo_via: 'segunda_via',
+  tests\ordens-transporte.service.test.js:129:                ordem,
+> tests\ordens-transporte.service.test.js:130:                voucher
+  tests\ordens-transporte.service.test.js:131:            },
+  tests\ordens-transporte.service.test.js:132:            error: null
+  tests\ordens-transporte.service.test.js:133:        });
+  tests\ordens-transporte.service.test.js:134:
+> tests\ordens-transporte.service.test.js:135:        const resultado = await gerarSegundaViaVoucherTransporte({
+  tests\ordens-transporte.service.test.js:136:            ordemId: 'ot-1',
+  tests\ordens-transporte.service.test.js:137:            emitidoPor: 'usuario-1'
+  tests\ordens-transporte.service.test.js:138:        });
+  tests\ordens-transporte.service.test.js:140:        expect(db.rpc).toHaveBeenCalledWith(
+> tests\ordens-transporte.service.test.js:141:            'gerar_segunda_via_voucher_transporte',
+  tests\ordens-transporte.service.test.js:142:            {
+  tests\ordens-transporte.service.test.js:143:                p_ordem_id: 'ot-1',
+  tests\ordens-transporte.service.test.js:144:                p_emitido_por: 'usuario-1'
+  tests\ordens-transporte.service.test.js:149:        expect(resultado.data.id).toBe('ot-1');
+> tests\ordens-transporte.service.test.js:150:        expect(resultado.data.voucher.numero_via).toBe(2);
+> tests\ordens-transporte.service.test.js:151:        expect(resultado.data.voucher.tipo_via).toBe('segunda_via');
+  tests\ordens-transporte.service.test.js:152:    });
+  tests\ordens-transporte.service.test.js:153:
+  tests\ordens-transporte.service.test.js:154:    it('converte erro de OT inexistente em erro de negócio', async () => {
+  tests\ordens-transporte.service.test.js:161:
+> tests\ordens-transporte.service.test.js:162:        const resultado = await gerarSegundaViaVoucherTransporte({
+  tests\ordens-transporte.service.test.js:163:            ordemId: 'ot-inexistente',
+  tests\ordens-transporte.service.test.js:164:            emitidoPor: 'usuario-1'
+  tests\ordens-transporte.service.test.js:165:        });
+  tests\ordens-transporte.service.test.js:178:
+> tests\ordens-transporte.service.test.js:179:        const resultado = await gerarSegundaViaVoucherTransporte({
+  tests\ordens-transporte.service.test.js:180:            ordemId: 'ot-vencida',
+  tests\ordens-transporte.service.test.js:181:            emitidoPor: 'usuario-1'
+  tests\ordens-transporte.service.test.js:182:        });
+  tests\ordens-transporte.service.test.js:195:
+> tests\ordens-transporte.service.test.js:196:        const resultado = await gerarSegundaViaVoucherTransporte({
+  tests\ordens-transporte.service.test.js:197:            ordemId: 'ot-1',
+  tests\ordens-transporte.service.test.js:198:            emitidoPor: 'usuario-1'
+  tests\ordens-transporte.service.test.js:199:        });
+  tests\voucher-transporte-pdf.test.js:1:import {
+> tests\voucher-transporte-pdf.test.js:2:    buildVoucherTransportePdf,
+> tests\voucher-transporte-pdf.test.js:3:    nomeArquivoVoucherTransporte
+> tests\voucher-transporte-pdf.test.js:4:} from '../src/modules/transporte/services/voucher-transporte-pdf.service.js';
+  tests\voucher-transporte-pdf.test.js:5:
+> tests\voucher-transporte-pdf.test.js:6:describe('RF_F11 - PDF do voucher de transporte', () => {
+  tests\voucher-transporte-pdf.test.js:7:    const ordem = {
+  tests\voucher-transporte-pdf.test.js:8:        id: 'ot-1',
+  tests\voucher-transporte-pdf.test.js:9:        numero: 'OT-20261024-ABC123',
+  tests\voucher-transporte-pdf.test.js:21:
+> tests\voucher-transporte-pdf.test.js:22:    const voucher = {
+  tests\voucher-transporte-pdf.test.js:23:        codigo: 'VT-ABC123',
+  tests\voucher-transporte-pdf.test.js:24:        tipo_via: 'original',
+  tests\voucher-transporte-pdf.test.js:25:        numero_via: 1
+  tests\voucher-transporte-pdf.test.js:28:    it('gera um PDF válido como Buffer', () => {
+> tests\voucher-transporte-pdf.test.js:29:        const pdf = buildVoucherTransportePdf(ordem, voucher);
+  tests\voucher-transporte-pdf.test.js:30:
+  tests\voucher-transporte-pdf.test.js:31:        expect(Buffer.isBuffer(pdf)).toBe(true);
+  tests\voucher-transporte-pdf.test.js:32:        expect(pdf.subarray(0, 8).toString('ascii')).toBe('%PDF-1.4');
+  tests\voucher-transporte-pdf.test.js:35:
+> tests\voucher-transporte-pdf.test.js:36:    it('inclui os dados principais do voucher no PDF', () => {
+> tests\voucher-transporte-pdf.test.js:37:        const pdf = buildVoucherTransportePdf(ordem, voucher);
+  tests\voucher-transporte-pdf.test.js:38:        const conteudo = pdf.toString('binary');
+  tests\voucher-transporte-pdf.test.js:39:
+  tests\voucher-transporte-pdf.test.js:40:        expect(conteudo).toContain('OT-20261024-ABC123');
+  tests\voucher-transporte-pdf.test.js:47:    it('gera nome de arquivo identificando a via', () => {
+> tests\voucher-transporte-pdf.test.js:48:        expect(nomeArquivoVoucherTransporte(ordem, voucher))
+> tests\voucher-transporte-pdf.test.js:49:            .toBe('OT-20261024-ABC123-voucher-via-1.pdf');
+  tests\voucher-transporte-pdf.test.js:50:    });
+  tests\voucher-transporte-pdf.test.js:51:
+  tests\voucher-transporte-pdf.test.js:52:    it('identifica corretamente a segunda via', () => {
+  tests\voucher-transporte-pdf.test.js:53:        const segundaVia = {
+> tests\voucher-transporte-pdf.test.js:54:            ...voucher,
+  tests\voucher-transporte-pdf.test.js:55:            tipo_via: 'segunda_via',
+  tests\voucher-transporte-pdf.test.js:56:            numero_via: 2
+  tests\voucher-transporte-pdf.test.js:57:        };
+  tests\voucher-transporte-pdf.test.js:58:
+> tests\voucher-transporte-pdf.test.js:59:        expect(nomeArquivoVoucherTransporte(ordem, segundaVia))
+> tests\voucher-transporte-pdf.test.js:60:            .toBe('OT-20261024-ABC123-voucher-via-2.pdf');
+  tests\voucher-transporte-pdf.test.js:61:    });
+  tests\voucher-transporte-pdf.test.js:62:});
+  migrations\20261024_add_ordens_transporte.sql:35:
+> migrations\20261024_add_ordens_transporte.sql:36:CREATE TABLE IF NOT EXISTS public.ordem_transporte_vouchers (
+  migrations\20261024_add_ordens_transporte.sql:37:    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  migrations\20261024_add_ordens_transporte.sql:38:    ordem_transporte_id UUID NOT NULL
+  migrations\20261024_add_ordens_transporte.sql:39:        REFERENCES public.ordens_transporte(id) ON DELETE RESTRICT,
+  migrations\20261024_add_ordens_transporte.sql:50:
+> migrations\20261024_add_ordens_transporte.sql:51:    CONSTRAINT ordem_transporte_voucher_via_unique
+  migrations\20261024_add_ordens_transporte.sql:52:        UNIQUE (ordem_transporte_id, numero_via),
+  migrations\20261024_add_ordens_transporte.sql:53:
+> migrations\20261024_add_ordens_transporte.sql:54:    CONSTRAINT ordem_transporte_voucher_entrega_check
+  migrations\20261024_add_ordens_transporte.sql:55:        CHECK (
+  migrations\20261024_add_ordens_transporte.sql:56:            (entregue_em IS NULL AND entregue_por IS NULL AND 
+destinatario IS NULL)
+  migrations\20261024_add_ordens_transporte.sql:57:            OR
+  migrations\20261024_add_ordens_transporte.sql:60:
+> migrations\20261024_add_ordens_transporte.sql:61:    CONSTRAINT ordem_transporte_voucher_tipo_via_check
+  migrations\20261024_add_ordens_transporte.sql:62:        CHECK (
+  migrations\20261024_add_ordens_transporte.sql:63:            (numero_via = 1 AND tipo_via = 'original')
+  migrations\20261024_add_ordens_transporte.sql:64:            OR
+  migrations\20261024_add_ordens_transporte.sql:74:
+> migrations\20261024_add_ordens_transporte.sql:75:CREATE INDEX IF NOT EXISTS idx_ordem_transporte_vouchers_ordem
+> migrations\20261024_add_ordens_transporte.sql:76:    ON public.ordem_transporte_vouchers(ordem_transporte_id);
+  migrations\20261024_add_ordens_transporte.sql:77:
+  migrations\20261024_add_ordens_transporte.sql:78:ALTER TABLE public.ordens_transporte ENABLE ROW LEVEL SECURITY;
+> migrations\20261024_add_ordens_transporte.sql:79:ALTER TABLE public.ordem_transporte_vouchers ENABLE ROW LEVEL 
+SECURITY;
+  migrations\20261024_add_ordens_transporte.sql:80:
+  migrations\20261024_add_ordens_transporte.sql:81:REVOKE ALL ON TABLE public.ordens_transporte
+  migrations\20261024_add_ordens_transporte.sql:82:    FROM PUBLIC, anon, authenticated;
+  migrations\20261024_add_ordens_transporte.sql:83:
+> migrations\20261024_add_ordens_transporte.sql:84:REVOKE ALL ON TABLE public.ordem_transporte_vouchers
+  migrations\20261024_add_ordens_transporte.sql:85:    FROM PUBLIC, anon, authenticated;
+  migrations\20261024_add_ordens_transporte.sql:86:
+  migrations\20261024_add_ordens_transporte.sql:87:GRANT SELECT, INSERT, UPDATE ON TABLE public.ordens_transporte
+  migrations\20261024_add_ordens_transporte.sql:89:
+> migrations\20261024_add_ordens_transporte.sql:90:GRANT SELECT, INSERT, UPDATE ON TABLE 
+public.ordem_transporte_vouchers
+  migrations\20261024_add_ordens_transporte.sql:91:    TO service_role;
+  migrations\20261024_add_ordens_transporte.sql:92:
+  migrations\20261024_add_ordens_transporte.sql:93:
+> migrations\20261024_add_ordens_transporte.sql:94:-- Registrar a entrega do voucher e atualizar o estado da OT
+  migrations\20261024_add_ordens_transporte.sql:95:-- na mesma transação.
+  migrations\20261024_add_ordens_transporte.sql:96:
+> migrations\20261024_add_ordens_transporte.sql:97:CREATE OR REPLACE FUNCTION 
+public.registrar_entrega_voucher_transporte(
+  migrations\20261024_add_ordens_transporte.sql:98:    p_ordem_id UUID,
+> migrations\20261024_add_ordens_transporte.sql:99:    p_voucher_id UUID,
+  migrations\20261024_add_ordens_transporte.sql:100:    p_entregue_por UUID,
+  migrations\20261024_add_ordens_transporte.sql:101:    p_destinatario TEXT
+  migrations\20261024_add_ordens_transporte.sql:102:)
+  migrations\20261024_add_ordens_transporte.sql:108:    v_ordem public.ordens_transporte%ROWTYPE;
+> migrations\20261024_add_ordens_transporte.sql:109:    v_voucher public.ordem_transporte_vouchers%ROWTYPE;
+  migrations\20261024_add_ordens_transporte.sql:110:BEGIN
+  migrations\20261024_add_ordens_transporte.sql:111:    IF p_entregue_por IS NULL THEN
+  migrations\20261024_add_ordens_transporte.sql:112:        RAISE EXCEPTION 'USUARIO_OBRIGATORIO';
+  migrations\20261024_add_ordens_transporte.sql:129:    SELECT *
+> migrations\20261024_add_ordens_transporte.sql:130:      INTO v_voucher
+> migrations\20261024_add_ordens_transporte.sql:131:      FROM public.ordem_transporte_vouchers
+> migrations\20261024_add_ordens_transporte.sql:132:     WHERE id = p_voucher_id
+  migrations\20261024_add_ordens_transporte.sql:133:       AND ordem_transporte_id = p_ordem_id
+  migrations\20261024_add_ordens_transporte.sql:134:     FOR UPDATE;
+  migrations\20261024_add_ordens_transporte.sql:135:
+  migrations\20261024_add_ordens_transporte.sql:136:    IF NOT FOUND THEN
+> migrations\20261024_add_ordens_transporte.sql:137:        RAISE EXCEPTION 'VOUCHER_NAO_ENCONTRADO';
+  migrations\20261024_add_ordens_transporte.sql:138:    END IF;
+  migrations\20261024_add_ordens_transporte.sql:139:
+  migrations\20261024_add_ordens_transporte.sql:140:    IF v_ordem.status <> 'emitida' THEN
+  migrations\20261024_add_ordens_transporte.sql:148:
+> migrations\20261024_add_ordens_transporte.sql:149:    IF v_voucher.entregue_em IS NOT NULL THEN
+> migrations\20261024_add_ordens_transporte.sql:150:        RAISE EXCEPTION 'VOUCHER_JA_ENTREGUE';
+  migrations\20261024_add_ordens_transporte.sql:151:    END IF;
+  migrations\20261024_add_ordens_transporte.sql:152:
+> migrations\20261024_add_ordens_transporte.sql:153:    UPDATE public.ordem_transporte_vouchers
+  migrations\20261024_add_ordens_transporte.sql:154:       SET entregue_em = NOW(),
+  migrations\20261024_add_ordens_transporte.sql:155:           entregue_por = p_entregue_por,
+  migrations\20261024_add_ordens_transporte.sql:156:           destinatario = TRIM(p_destinatario)
+> migrations\20261024_add_ordens_transporte.sql:157:     WHERE id = p_voucher_id
+> migrations\20261024_add_ordens_transporte.sql:158:     RETURNING * INTO v_voucher;
+  migrations\20261024_add_ordens_transporte.sql:159:
+  migrations\20261024_add_ordens_transporte.sql:160:    UPDATE public.ordens_transporte
+  migrations\20261024_add_ordens_transporte.sql:161:       SET status = 'entregue',
+  migrations\20261024_add_ordens_transporte.sql:167:        'ordem', to_jsonb(v_ordem),
+> migrations\20261024_add_ordens_transporte.sql:168:        'voucher', to_jsonb(v_voucher)
+  migrations\20261024_add_ordens_transporte.sql:169:    );
+  migrations\20261024_add_ordens_transporte.sql:170:END;
+  migrations\20261024_add_ordens_transporte.sql:171:$function$;
+  migrations\20261024_add_ordens_transporte.sql:173:
+> migrations\20261024_add_ordens_transporte.sql:174:-- Gerar segunda via do voucher sem criar outra OT.
+  migrations\20261024_add_ordens_transporte.sql:175:
+> migrations\20261024_add_ordens_transporte.sql:176:CREATE OR REPLACE FUNCTION 
+public.gerar_segunda_via_voucher_transporte(
+  migrations\20261024_add_ordens_transporte.sql:177:    p_ordem_id UUID,
+  migrations\20261024_add_ordens_transporte.sql:178:    p_emitido_por UUID
+  migrations\20261024_add_ordens_transporte.sql:179:)
+  migrations\20261024_add_ordens_transporte.sql:186:    v_ordem public.ordens_transporte%ROWTYPE;
+> migrations\20261024_add_ordens_transporte.sql:187:    v_voucher public.ordem_transporte_vouchers%ROWTYPE;
+  migrations\20261024_add_ordens_transporte.sql:188:    v_proxima_via INTEGER;
+  migrations\20261024_add_ordens_transporte.sql:189:BEGIN
+  migrations\20261024_add_ordens_transporte.sql:190:    IF p_ordem_id IS NULL OR p_emitido_por IS NULL THEN
+  migrations\20261024_add_ordens_transporte.sql:222:      INTO v_proxima_via
+> migrations\20261024_add_ordens_transporte.sql:223:      FROM public.ordem_transporte_vouchers
+  migrations\20261024_add_ordens_transporte.sql:224:     WHERE ordem_transporte_id = p_ordem_id;
+  migrations\20261024_add_ordens_transporte.sql:225:
+> migrations\20261024_add_ordens_transporte.sql:226:    INSERT INTO public.ordem_transporte_vouchers (
+  migrations\20261024_add_ordens_transporte.sql:227:        ordem_transporte_id,
+  migrations\20261024_add_ordens_transporte.sql:228:        numero_via,
+  migrations\20261024_add_ordens_transporte.sql:229:        tipo_via,
+  migrations\20261024_add_ordens_transporte.sql:239:    )
+> migrations\20261024_add_ordens_transporte.sql:240:    RETURNING * INTO v_voucher;
+  migrations\20261024_add_ordens_transporte.sql:241:
+  migrations\20261024_add_ordens_transporte.sql:242:    RETURN jsonb_build_object(
+  migrations\20261024_add_ordens_transporte.sql:243:        'ordem', to_jsonb(v_ordem),
+> migrations\20261024_add_ordens_transporte.sql:244:        'voucher', to_jsonb(v_voucher)
+  migrations\20261024_add_ordens_transporte.sql:245:    );
+  migrations\20261024_add_ordens_transporte.sql:246:END;
+  migrations\20261024_add_ordens_transporte.sql:247:$function$;
+  migrations\20261024_add_ordens_transporte.sql:251:
+> migrations\20261024_add_ordens_transporte.sql:252:REVOKE ALL ON FUNCTION public.registrar_entrega_voucher_transporte(
+  migrations\20261024_add_ordens_transporte.sql:253:    UUID, UUID, UUID, TEXT
+  migrations\20261024_add_ordens_transporte.sql:254:) FROM PUBLIC, anon, authenticated;
+  migrations\20261024_add_ordens_transporte.sql:255:
+> migrations\20261024_add_ordens_transporte.sql:256:GRANT EXECUTE ON FUNCTION 
+public.registrar_entrega_voucher_transporte(
+  migrations\20261024_add_ordens_transporte.sql:257:    UUID, UUID, UUID, TEXT
+  migrations\20261024_add_ordens_transporte.sql:258:) TO service_role;
+  migrations\20261024_add_ordens_transporte.sql:259:
+> migrations\20261024_add_ordens_transporte.sql:260:REVOKE ALL ON FUNCTION public.gerar_segunda_via_voucher_transporte(
+  migrations\20261024_add_ordens_transporte.sql:261:    UUID, UUID
+  migrations\20261024_add_ordens_transporte.sql:262:) FROM PUBLIC, anon, authenticated;
+  migrations\20261024_add_ordens_transporte.sql:263:
+> migrations\20261024_add_ordens_transporte.sql:264:GRANT EXECUTE ON FUNCTION 
+public.gerar_segunda_via_voucher_transporte(
+  migrations\20261024_add_ordens_transporte.sql:265:    UUID, UUID
+  migrations\20261024_add_ordens_transporte.sql:266:) TO service_role;
+
+
