@@ -12,6 +12,7 @@ import {
     obterLembreteFornecedor,
     reenviarLembreteFornecedor,
     reenviarEmailOrdem,
+    reenviarReciboOF,
     baixarPdfOrdem,
     atualizarObservacoes
 } from '../controller/fornecimento.controller.js';
@@ -227,7 +228,10 @@ router.post(
     '/:id/email/reenvio',
     reenviarEmailOrdem
 );
-
+router.post(
+    '/:id/recibo/reenvio',
+    reenviarReciboOF
+);
 router.get(
     '/:id/pdf',
     baixarPdfOrdem

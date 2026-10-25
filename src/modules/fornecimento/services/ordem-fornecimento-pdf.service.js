@@ -123,3 +123,78 @@ export function buildOrderPdf(ordem) {
 export function nomeArquivoPdf(ordem) {
     return `${String(ordem?.numero || ordem?.id || 'ordem-fornecimento')}.pdf`
 }
+
+function montarLinhasRecibo(ordem) {
+    const dataFinalizacao = ordem.data_finalizacao
+        ? new Date(ordem.data_finalizacao).toLocaleString('pt-BR')
+        : new Date().toLocaleString('pt-BR')
+
+    const linhas = [
+        'RECIBO DE FINALIZACAO DA ORDEM DE FORNECIMENTO',
+        '',
+        `Ordem de fornecimento: ${ordem.numero || ordem.id}`,
+        `Fornecedor: ${fornecedorNome(ordem)}`,
+        `Email do fornecedor: ${ordem.fornecedores?.email || '-'}`,
+        `Paciente: ${ordem.pacientes?.nome || '-'}`,
+        `Data de finalizacao: ${dataFinalizacao}`,
+        '',
+        'ITENS ENTREGUES'
+    ]
+
+    for (const item of ordem.ordem_fornecimento_itens || []) {
+        const solicitada = Number(item.quantidade_solicitada || 0)
+        const entregue = Number(item.quantidade_entregue || 0)
+
+        linhas.push(
+            ...quebrarLinha(
+                `${item.descricao || '-'} | Solicitada: ${solicitada} | Entregue: ${entregue}`
+            )
+        )
+    }
+
+    linhas.push(
+        '',
+        'Declaracao: este documento registra a finalizacao da',
+        'Ordem de Fornecimento conforme os itens registrados no sistema.'
+    )
+
+    return linhas
+}
+
+export function buildReceiptPdf(ordem) {
+    const content = montarConteudo(montarLinhasRecibo(ordem))
+    const objetos = [
+        '<< /Type /Catalog /Pages 2 0 R >>',
+        '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+        '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+        '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+        `<< /Length ${Buffer.byteLength(content, 'ascii')} >>\nstream\n${content}\nendstream`
+    ]
+
+    const partes = ['%PDF-1.4\n%\xE2\xE3\xCF\xD3\n']
+    const offsets = [0]
+
+    objetos.forEach((objeto, index) => {
+        offsets.push(Buffer.byteLength(partes.join(''), 'binary'))
+        partes.push(`${index + 1} 0 obj\n${objeto}\nendobj\n`)
+    })
+
+    const inicioXref = Buffer.byteLength(partes.join(''), 'binary')
+    partes.push(`xref\n0 ${objetos.length + 1}\n`)
+    partes.push('0000000000 65535 f \n')
+
+    for (let index = 1; index < offsets.length; index += 1) {
+        partes.push(`${String(offsets[index]).padStart(10, '0')} 00000 n \n`)
+    }
+
+    partes.push(
+        `trailer\n<< /Size ${objetos.length + 1} /Root 1 0 R >>\nstartxref\n${inicioXref}\n%%EOF\n`
+    )
+
+    return Buffer.from(partes.join(''), 'binary')
+}
+
+export function nomeArquivoReciboPdf(ordem) {
+    const identificador = String(ordem?.numero || ordem?.id || 'ordem')
+    return `recibo-finalizacao-${identificador}.pdf`
+}

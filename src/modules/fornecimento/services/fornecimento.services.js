@@ -12,6 +12,9 @@ import {
   registrarOcorrencia,
 } from "../../historico_pacientes/services/auditoria.service.js";
 import supabaseAdmin from '../../../config/supabaseAdmin.js';
+import {
+  enviarReciboFinalizacaoOF
+} from './fornecimento-recibo.service.js';
 
 const PRAZO_PADRAO_DIAS_UTEIS = 7;
 
@@ -651,7 +654,12 @@ export async function confirmarRecebimentoOrdemDeFornecimento({
 
 
 
-export async function finalizarOrdemDeFornecimento({ id, atualizadoPor }) {
+
+export async function finalizarOrdemDeFornecimento({
+    id,
+    atualizadoPor,
+    enviarRecibo = enviarReciboFinalizacaoOF
+}) {
   const { data: ordem, error: buscaError } = await supabase
     .from("ordens_fornecimento")
     .select(
@@ -743,8 +751,7 @@ export async function finalizarOrdemDeFornecimento({ id, atualizadoPor }) {
     return { data: null, error: responsaveis.error };
   }
 
-  // AtualizaÃ§Ã£o condicional para evitar finalizar uma ordem
-  // que tenha mudado de status desde a leitura inicial.
+  // Finalização condicional para evitar alteração concorrente de status.
   const { data: atualizada, error: updateError } = await supabase
     .from("ordens_fornecimento")
     .update({
@@ -788,7 +795,6 @@ export async function finalizarOrdemDeFornecimento({ id, atualizadoPor }) {
   });
 
   if (eventoError) {
-    // A ordem jÃ¡ foi finalizada. NÃ£o fingir que a atualizaÃ§Ã£o foi desfeita.
     return {
       data: null,
       error: {
@@ -798,6 +804,25 @@ export async function finalizarOrdemDeFornecimento({ id, atualizadoPor }) {
         code: "FINALIZADA_HISTORICO_PENDENTE"
       }
     };
+  }
+
+  // RF_F9: tentar enviar o recibo sem desfazer a finalização em caso de falha.
+  try {
+    const resultadoRecibo = await enviarRecibo({
+    ordemId: id,
+    usuarioId: atualizadoPor
+});
+    if (resultadoRecibo.error) {
+      console.error(
+        "[RF_F9] OF finalizada, mas o envio do recibo falhou:",
+        resultadoRecibo.error.message
+      );
+    }
+  } catch (erroRecibo) {
+    console.error(
+      "[RF_F9] OF finalizada, mas ocorreu um erro ao processar o recibo:",
+      erroRecibo.message
+    );
   }
 
   return await buscarOrdemDeFornecimento(id);
