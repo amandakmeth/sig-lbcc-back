@@ -1,29 +1,81 @@
 import supabase from '../../../config/supabase.js'
 
+const incluirAreasNosProdutos = async (produtos) => {
+    if (!produtos || produtos.length === 0) {
+        return { data: produtos ?? [], error: null }
+    }
+
+    const produtoIds = produtos.map(produto => produto.id)
+
+    const { data: vinculos, error } = await supabase
+        .from('areas_produtos')
+        .select('produto_id, area_id')
+        .in('produto_id', produtoIds)
+
+    if (error) {
+        return { data: null, error }
+    }
+
+    const areasPorProduto = new Map()
+
+    for (const vinculo of vinculos ?? []) {
+        if (!areasPorProduto.has(vinculo.produto_id)) {
+            areasPorProduto.set(vinculo.produto_id, [])
+        }
+
+        areasPorProduto.get(vinculo.produto_id).push(vinculo.area_id)
+    }
+
+    return {
+        data: produtos.map(produto => ({
+            ...produto,
+            areas_ids: areasPorProduto.get(produto.id) ?? []
+        })),
+        error: null
+    }
+}
+
 // =========================
 // LISTAR PRODUTOS
 // =========================
-export const listarProdutos = async (
-    ativo = true
-) => {
-
-    return await supabase
+export const listarProdutos = async (ativo = true) => {
+    const { data, error } = await supabase
         .from('produtos')
         .select('*')
         .eq('ativo', ativo)
         .order('nome', { ascending: true })
+
+    if (error) {
+        return { data: null, error }
+    }
+
+    return await incluirAreasNosProdutos(data)
 }
 
 // =========================
 // BUSCAR POR ID
 // =========================
 export const buscarProdutoPorId = async (id) => {
-
-    return await supabase
+    const { data, error } = await supabase
         .from('produtos')
         .select('*')
         .eq('id', id)
         .single()
+
+    if (error) {
+        return { data: null, error }
+    }
+
+    const resultado = await incluirAreasNosProdutos([data])
+
+    if (resultado.error) {
+        return { data: null, error: resultado.error }
+    }
+
+    return {
+        data: resultado.data[0],
+        error: null
+    }
 }
 
 // =========================
