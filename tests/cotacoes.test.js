@@ -9,6 +9,7 @@ let cotacaoId = '';
 let pacienteId = '';
 let areaId = '';
 let fornecedorId = '';
+let produtoId = '';
 
 beforeAll(async () => {
 
@@ -52,6 +53,7 @@ beforeAll(async () => {
         });
 
     pacienteId = (paciente.body[0] || paciente.body)?.id;
+    console.log('PACIENTE:', paciente.statusCode, paciente.body);
 
     const area = await request(app)
         .post('/areas')
@@ -62,6 +64,26 @@ beforeAll(async () => {
         });
 
     areaId = (area.body[0] || area.body)?.id;
+    console.log('ÁREA:', area.statusCode, area.body);
+
+    const produto = await request(app)
+    .post('/produtos')
+    .set('Authorization', `Bearer ${tokenGestor}`)
+    .send({
+        nome: `Produto teste ${stamp}`,
+        descricao: 'Produto para testes de cotação',
+        unidade: 'UN',
+        areas_ids: [areaId]
+    });
+
+    const produtoCriado = produto.body[0] || produto.body;
+    produtoId = produtoCriado?.id;
+
+    if (produto.statusCode !== 201 || !produtoId) {
+        throw new Error(
+            `Não criou produto para testes: ${JSON.stringify(produto.body)}`
+        );
+    }
 
     const fornecedor = await request(app)
         .post('/fornecedores')
@@ -76,6 +98,7 @@ beforeAll(async () => {
 
     const fornecedorCriado = fornecedor.body[0] || fornecedor.body;
     fornecedorId = fornecedorCriado?.id;
+    console.log('FORNECEDOR:', fornecedor.statusCode, fornecedor.body);
 
     if (!pacienteId || !areaId || !fornecedorId) {
         throw new Error(
@@ -126,18 +149,16 @@ describe('Cotações - Regras de Negócio', () => {
                     {
                         descricao: 'Item teste automatizado',
                         quantidade: 2,
-                        unidade: 'UN'
+                        unidade: 'UN',
+                        produto_id: produtoId
                     }
                 ]
             });
 
         // 🔥 IMPORTANTE: 400 por FK continua o risco já conhecido
-        expect([201, 400]).toContain(res.statusCode);
+        console.log('CRIAÇÃO DA COTAÇÃO:', res.statusCode, res.body);
 
-        if (res.statusCode === 400) {
-            expect(res.body.erro).not.toMatch(/pelo menos um item/i);
-            return;
-        }
+expect(res.statusCode).toBe(201);
 
         const cotacao = res.body[0] || res.body;
 

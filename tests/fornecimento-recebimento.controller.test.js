@@ -33,8 +33,16 @@ const email = {
 };
 
 const auditoria = {
-    registrarOcorrencia: jest.fn()
+    registrarOcorrencia: jest.fn(),
+    registrarAuditoria: jest.fn()
 };
+
+jest.unstable_mockModule('../src/config/supabaseAdmin.js', () => ({
+    default: {
+        rpc: jest.fn(),
+        from: jest.fn()
+    }
+}));
 
 jest.unstable_mockModule(
     '../src/modules/fornecimento/services/fornecimento.services.js',

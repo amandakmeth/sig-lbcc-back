@@ -6,6 +6,7 @@ let tokenOperador = '';
 
 let pacienteId = '';
 let areaId = '';
+let produtoCriado = null;
 let fornecedorA = null;
 let fornecedorB = null;
 let fornecedorC = null;
@@ -55,6 +56,24 @@ beforeAll(async () => {
 
     areaId = (area.body[0] || area.body)?.id;
 
+    const produto = await request(app)
+    .post('/produtos')
+    .set('Authorization', `Bearer ${tokenGestor}`)
+    .send({
+        nome: `Produto orçamento ${stamp}`,
+        descricao: 'Produto para testes de orçamento',
+        unidade: 'UN',
+        areas_ids: [areaId]
+    });
+
+    produtoCriado = produto.body[0] || produto.body;
+
+    if (produto.statusCode !== 201 || !produtoCriado?.id) {
+        throw new Error(
+            `Não criou produto para testes: ${JSON.stringify(produto.body)}`
+        );
+    }
+
     fornecedorA = await criarFornecedor({
         razao_social: `Fornecedor A ${stamp}`,
         nome_fantasia: 'Farmacia Central',
@@ -100,18 +119,21 @@ beforeAll(async () => {
     }
 }, 30000);
 
-async function criarFornecedor(dados) {
+
+async function criarFornecedor(dados, produtosIds = [produtoCriado.id]) {
     const res = await request(app)
         .post('/fornecedores')
         .set('Authorization', `Bearer ${tokenGestor}`)
         .send({
             telefone: '43999999999',
             email: 'orcamento@email.com',
-            ...dados
+            ...dados,
+            produtos_ids: produtosIds
         });
 
     return res.body[0] || res.body;
 }
+
 
 async function criarCotacao(itens) {
     const res = await request(app)
@@ -123,7 +145,10 @@ async function criarCotacao(itens) {
             observacoes: 'teste orçamento',
             paciente_id: pacienteId,
             area_id: areaId,
-            itens
+            itens: itens.map((item) => ({
+                ...item,
+                produto_id: item.produto_id ?? produtoCriado.id
+            }))
         });
 
     if (res.statusCode !== 201) {
@@ -336,7 +361,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Seringa 10ml',
                 quantidade: 2,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             }
         ]);
 
@@ -386,7 +412,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item leitura',
                 quantidade: 1,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             }
         ]);
 
@@ -433,7 +460,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item gestor',
                 quantidade: 1,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             }
         ]);
 
@@ -466,7 +494,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item um',
                 quantidade: 2,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             },
             {
                 descricao: 'Item dois',
@@ -539,7 +568,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Com preço',
                 quantidade: 1,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             },
             {
                 descricao: 'Sem preço',
@@ -573,7 +603,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item validação',
                 quantidade: 2,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             }
         ]);
 
@@ -754,7 +785,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item data',
                 quantidade: 1,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             }
         ]);
 
@@ -796,7 +828,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item lote',
                 quantidade: 2,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             }
         ]);
 
@@ -857,7 +890,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item duplicata',
                 quantidade: 1,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             }
         ]);
 
@@ -939,7 +973,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item único',
                 quantidade: 3,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             }
         ]);
 
@@ -989,7 +1024,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item extra',
                 quantidade: 1,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             }
         ]);
 
@@ -1067,7 +1103,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item validação lote',
                 quantidade: 2,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             }
         ]);
 
@@ -1130,7 +1167,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item correção',
                 quantidade: 2,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             }
         ]);
 
@@ -1198,7 +1236,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item fornecedor fixo',
                 quantidade: 1,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             }
         ]);
 
@@ -1253,7 +1292,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item valor inválido',
                 quantidade: 2,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             }
         ]);
 
@@ -1314,7 +1354,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item apagar',
                 quantidade: 2,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             }
         ]);
 
@@ -1381,7 +1422,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item último',
                 quantidade: 1,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             }
         ]);
 
@@ -1440,7 +1482,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item operador',
                 quantidade: 1,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             }
         ]);
 
@@ -1634,7 +1677,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item vencedor único',
                 quantidade: 2,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             }
         ]);
 
@@ -1720,7 +1764,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item ainda incompleto',
                 quantidade: 1,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             }
         ]);
 
@@ -1775,7 +1820,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item A',
                 quantidade: 1,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             },
             {
                 descricao: 'Item B',
@@ -1893,7 +1939,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item A',
                 quantidade: 1,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             },
             {
                 descricao: 'Item B',
@@ -1977,7 +2024,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item A',
                 quantidade: 1,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             },
             {
                 descricao: 'Item B',
@@ -2045,7 +2093,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item A',
                 quantidade: 1,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             },
             {
                 descricao: 'Item B',
@@ -2124,7 +2173,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item A',
                 quantidade: 1,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             },
             {
                 descricao: 'Item B',
@@ -2254,7 +2304,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item único finalizado',
                 quantidade: 1,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             }
         ]);
 
@@ -2317,7 +2368,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item A',
                 quantidade: 2,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             },
             {
                 descricao: 'Item B',
@@ -2355,7 +2407,8 @@ describe('Orçamentos no Item da Cotação', () => {
         const res = await postItem(tokenGestor, cotacao.id, {
             descricao: 'Item C novo',
             quantidade: 1,
-            unidade: 'UN'
+            unidade: 'UN',
+            produto_id: produtoCriado.id
         });
 
         expect(res.statusCode).toBe(201);
@@ -2384,7 +2437,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item com preço',
                 quantidade: 2,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             },
             {
                 descricao: 'Item sem preço',
@@ -2407,6 +2461,9 @@ describe('Orçamentos no Item da Cotação', () => {
                 }
             ]
         );
+
+        expect(lancado.statusCode).toBe(201);
+        expect(lancado.body.status).toBe('em_andamento');
 
         expect(lancado.statusCode).toBe(201);
         expect(lancado.body.status).toBe('em_andamento');
@@ -2440,7 +2497,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Único item',
                 quantidade: 1,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             }
         ]);
 
@@ -2463,7 +2521,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item quantidade',
                 quantidade: 2,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             }
         ]);
 
@@ -2484,6 +2543,9 @@ describe('Orçamentos no Item da Cotação', () => {
                 }
             ]
         );
+
+        expect(lancado.statusCode).toBe(201);
+        expect(lancado.body.status).toBe('em_andamento');
 
         expect(lancado.statusCode).toBe(201);
         expect(itemOrcamentos(lancado.body, itemId)).toEqual(
@@ -2535,7 +2597,8 @@ describe('Orçamentos no Item da Cotação', () => {
             .send({
                 nome: `Produto item ${Date.now()}`,
                 descricao: 'Produto para item da cotação',
-                unidade: 'CX'
+                unidade: 'CX',
+                areas_ids: [areaId]
             });
 
         const produtoCriado = produto.body[0] || produto.body;
@@ -2547,13 +2610,33 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item original',
                 quantidade: 1,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             }
         ]);
 
         const itemId = cotacao.cotacao_itens[0].id;
 
-        await postOrcamentos(
+        const fornecedorDoProduto = await criarFornecedor(
+            {
+                razao_social: `Fornecedor produto item ${Date.now()}`
+            },
+            [produtoCriado.id]
+        );
+
+        const respostaOrcamento = await postOrcamentos(
+            tokenGestor,
+            cotacao.id,
+            itemId,
+            [
+                {
+                    fornecedor_id: fornecedorDoProduto.id,
+                    valor_unitario: 10
+                }
+            ]
+        );
+
+        const lancado = await postOrcamentos(
             tokenGestor,
             cotacao.id,
             itemId,
@@ -2561,6 +2644,10 @@ describe('Orçamentos no Item da Cotação', () => {
                 {
                     fornecedor_id: fornecedorA.id,
                     valor_unitario: 10
+                },
+                {
+                    fornecedor_id: fornecedorB.id,
+                    valor_unitario: 15
                 }
             ]
         );
@@ -2622,7 +2709,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item atalho',
                 quantidade: 1,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             }
         ]);
 
@@ -2653,7 +2741,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item cancelamento',
                 quantidade: 1,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             }
         ]);
 
@@ -2818,7 +2907,8 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item A',
                 quantidade: 2,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             },
             {
                 descricao: 'Item B',
@@ -2921,10 +3011,18 @@ describe('Orçamentos no Item da Cotação', () => {
             {
                 descricao: 'Item único antigo',
                 quantidade: 1,
-                unidade: 'UN'
+                unidade: 'UN',
+                produto_id: produtoCriado.id
             }
         ]);
         const itemId = cotacao.cotacao_itens[0].id;
+
+        const fornecedorDoProduto = await criarFornecedor(
+            {
+                razao_social: `Fornecedor produto item ${Date.now()}`
+            },
+            [produtoCriado.id]
+        );
 
         for (const fornecedor of [fornecedorA, fornecedorB, fornecedorC]) {
             const res = await postPropostaAntiga(

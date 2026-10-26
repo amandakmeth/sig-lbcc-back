@@ -1,11 +1,37 @@
 import request from 'supertest'
 import app from '../src/app.js'
+import { getTokens } from './helpers/auth.js'
 
 let tokenGestor = ''
 let tokenOperador = ''
 let produtoId = ''
+let areaId = ''
 
 beforeAll(async () => {
+
+    const tokens = await getTokens()
+
+
+
+tokenGestor = tokens.gestor
+tokenOperador = tokens.operador
+
+const area = await request(app)
+    .post('/areas')
+    .set('Authorization', `Bearer ${tokenGestor}`)
+    .send({
+        nome: `Área Produtos Teste ${Date.now()}`,
+        descricao: 'Área para testes de produtos'
+    })
+
+const dadosArea = area.body[0] || area.body
+areaId = dadosArea.id
+
+if (area.statusCode !== 201 || !areaId) {
+    throw new Error(
+        `Não criou área para testes: ${JSON.stringify(area.body)}`
+    )
+}
 
     const gestor = await request(app)
         .post('/auth/login')
@@ -51,7 +77,8 @@ describe('Produtos - Regras de Negócio', () => {
             .send({
                 nome: `Produto ${Date.now()}`,
                 descricao: 'Teste',
-                unidade: 'UN'
+                unidade: 'UN',
+                areas_ids: [areaId]
             })
 
         expect(res.statusCode).toBe(201)
@@ -128,7 +155,8 @@ describe('Produtos - Regras de Negócio', () => {
             .put(`/produtos/${produtoId}`)
             .set('Authorization', `Bearer ${tokenGestor}`)
             .send({
-                descricao: 'Atualizado'
+                descricao: 'Atualizado',
+                areas_ids: [areaId]
             })
 
         expect(res.statusCode).toBe(200)
@@ -163,6 +191,8 @@ describe('Produtos - Regras de Negócio', () => {
         const res = await request(app)
             .delete(`/produtos/${produtoId}`)
             .set('Authorization', `Bearer ${tokenGestor}`)
+
+        console.log('RESPOSTA DA EXCLUSÃO:', res.statusCode, res.body)
 
         expect([200, 400]).toContain(res.statusCode)
 
