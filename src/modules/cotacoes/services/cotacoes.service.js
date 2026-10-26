@@ -220,6 +220,33 @@ export const inserirCotacao = async (dados) => {
         };
     }
 
+    // VALIDAR ÁREA
+    if (!dadosCotacao.area_id) {
+        return {
+            error: {
+                message: 'A área da cotação é obrigatória'
+            }
+        };
+    }
+
+    const { data: area, error: erroArea } = await supabase
+        .from('areas')
+        .select('id, ativo')
+        .eq('id', dadosCotacao.area_id)
+        .maybeSingle();
+
+    if (erroArea) {
+        return { data: null, error: erroArea };
+    }
+
+    if (!area || !area.ativo) {
+        return {
+            error: {
+                message: 'A área informada não existe ou está inativa'
+            }
+        };
+    }
+
     // =========================
     // VALIDAÇÃO DOS ITENS
     // =========================
@@ -228,7 +255,7 @@ export const inserirCotacao = async (dados) => {
         !Array.isArray(itens) ||
         itens.length === 0
     ) {
-        return {
+                return {
             error: {
                 message:
                     'A cotação deve possuir pelo menos um item'
@@ -236,7 +263,77 @@ export const inserirCotacao = async (dados) => {
         };
     }
 
+        // VALIDAR PRODUTOS CADASTRADOS
+    const idsProdutos = [
+        ...new Set(
+            itens
+                .map(item => item.produto_id)
+                .filter(Boolean)
+        )
+    ];
+
+    if (idsProdutos.length > 0) {
+        const { data: produtos, error: erroProdutos } = await supabase
+            .from('produtos')
+            .select('id, ativo')
+            .in('id', idsProdutos);
+
+        if (erroProdutos) {
+            return { data: null, error: erroProdutos };
+        }
+
+        const produtosInvalidos = idsProdutos.filter(id =>
+            !produtos.some(produto =>
+                produto.id === id && produto.ativo
+            )
+        );
+
+        if (produtosInvalidos.length > 0) {
+            return {
+                error: {
+                    message: 'Um ou mais produtos não existem ou estão inativos'
+                }
+            };
+        }
+    }
+
+    
+    // VALIDAR SE OS PRODUTOS PERTENCEM À ÁREA DA COTAÇÃO
+    if (idsProdutos.length > 0) {
+        const { data: vinculosArea, error: erroVinculosArea } =
+            await supabase
+                .from('areas_produtos')
+                .select('produto_id')
+                .eq('area_id', dadosCotacao.area_id)
+                .in('produto_id', idsProdutos);
+
+        if (erroVinculosArea) {
+            return { data: null, error: erroVinculosArea };
+        }
+
+        const produtosForaDaArea = idsProdutos.filter(id =>
+            !vinculosArea?.some(vinculo => vinculo.produto_id === id)
+        );
+
+        if (produtosForaDaArea.length > 0) {
+            return {
+                error: {
+                    message: 'Um ou mais produtos não estão vinculados à área selecionada'
+                }
+            };
+        }
+    }
+
+
     for (const [index, item] of itens.entries()) {
+
+        if (!item.produto_id) {
+            return {
+                error: {
+                    message: `Selecione um produto para o item ${index + 1}`
+                }
+            };
+        }
 
         if (
             !item.descricao ||

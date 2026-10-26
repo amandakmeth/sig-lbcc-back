@@ -81,7 +81,8 @@ export const createProduto = async (req, res) => {
         const {
             nome,
             descricao,
-            unidade
+            unidade,
+            areas_ids
         } = req.body
 
         if (!nome || !unidade) {
@@ -93,11 +94,12 @@ export const createProduto = async (req, res) => {
         }
 
         const { data, error } =
-            await inserirProduto({
-                nome,
-                descricao,
-                unidade
-            })
+        await inserirProduto({
+            nome,
+            descricao,
+            unidade,
+            areas_ids
+        })
 
         if (error) {
 
@@ -245,15 +247,12 @@ export const verificarRelacionamentosProduto =
 // =========================
 // EXCLUIR PRODUTO
 // =========================
+
 export const deleteProduto = async (req, res) => {
-
     try {
-
         if (req.user.perfil !== 'gestor') {
-
             return res.status(403).json({
-                erro:
-                    'Apenas gestor pode excluir produtos'
+                erro: 'Apenas gestor pode excluir produtos'
             })
         }
 
@@ -262,43 +261,43 @@ export const deleteProduto = async (req, res) => {
         const {
             data: relacionamentos,
             error: relError
-        } =
-            await verificarRelacionamentosProdutoService(id)
+        } = await verificarRelacionamentosProdutoService(id)
 
         if (relError) {
-
             return res.status(500).json({
                 erro: relError.message
             })
         }
 
-        if (
-            relacionamentos.possuiRelacionamentos
-        ) {
-
+        if (relacionamentos?.possuiRelacionamentos) {
             return res.status(400).json({
-                erro:
-                    'Produto possui vínculos',
+                erro: 'Produto possui vínculos',
                 possuiRelacionamentos: true
             })
         }
 
-        const { error } =
-            await deletarProduto(id)
+        const { data, error } = await deletarProduto(id)
 
         if (error) {
-
             return res.status(500).json({
-                erro: error.message
+                erro: error.message,
+                detalhes: error.details,
+                codigo: error.code,
+                dica: error.hint
+            })
+        }
+
+        if (!data || data.length === 0) {
+            return res.status(404).json({
+                erro: 'Produto não encontrado'
             })
         }
 
         return res.status(200).json({
-            message:
-                'Produto excluído com sucesso'
+            message: 'Produto excluído com sucesso'
         })
-
     } catch (err) {
+        console.error('Erro ao excluir produto:', err)
 
         return res.status(500).json({
             erro: 'Erro ao excluir produto'

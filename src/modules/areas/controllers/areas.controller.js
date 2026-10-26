@@ -73,7 +73,7 @@ export const createArea = async (req, res) => {
             })
         }
 
-        const { nome, descricao } = req.body
+        const { nome, descricao, tipo_ordem } = req.body
 
         if (!nome) {
             return res.status(400).json({
@@ -84,7 +84,8 @@ export const createArea = async (req, res) => {
         const { data, error } =
             await inserirArea({
                 nome,
-                descricao
+                descricao,
+                tipo_ordem
             })
 
         if (error) {

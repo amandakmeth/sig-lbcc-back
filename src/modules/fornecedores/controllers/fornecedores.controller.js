@@ -144,7 +144,10 @@ export const createFornecedor = async (req, res) => {
         }
 
         const { data, error } =
-            await inserirFornecedor(dados)
+            await inserirFornecedor({
+                ...dados,
+                produtos_ids: req.body.produtos_ids
+            })
 
         if (error) {
             return res.status(400).json({
@@ -178,11 +181,14 @@ export const updateFornecedor = async (req, res) => {
 
         const { id } = req.params
 
+        const dados = extrairDadosFornecedor(req.body)
+
+        if (req.body.produtos_ids !== undefined) {
+            dados.produtos_ids = req.body.produtos_ids
+        }
+
         const { data, error } =
-            await atualizarFornecedor(
-                id,
-                req.body
-            )
+            await atualizarFornecedor(id, dados)
 
         if (error) {
             return res.status(400).json({
