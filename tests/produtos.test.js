@@ -57,14 +57,21 @@ describe('Produtos - Regras de Negócio', () => {
     // =========================
     // LISTAR
     // =========================
-    it('deve listar produtos', async () => {
+
+    it('deve listar produtos com areas_ids', async () => {
         const res = await request(app)
             .get('/produtos')
             .set('Authorization', `Bearer ${tokenGestor}`)
 
         expect(res.statusCode).toBe(200)
         expect(Array.isArray(res.body)).toBe(true)
+
+        for (const produto of res.body) {
+            expect(produto).toHaveProperty('areas_ids')
+            expect(Array.isArray(produto.areas_ids)).toBe(true)
+        }
     })
+
 
     // =========================
     // CRIAR
@@ -125,8 +132,8 @@ describe('Produtos - Regras de Negócio', () => {
     // =========================
     // BUSCAR POR ID
     // =========================
-    it('deve buscar produto por id', async () => {
 
+    it('deve buscar produto por id com areas_ids', async () => {
         const res = await request(app)
             .get(`/produtos/${produtoId}`)
             .set('Authorization', `Bearer ${tokenGestor}`)
@@ -134,8 +141,13 @@ describe('Produtos - Regras de Negócio', () => {
         expect(res.statusCode).toBe(200)
 
         const produto = res.body[0] || res.body
+
         expect(produto).toHaveProperty('id')
+        expect(produto).toHaveProperty('areas_ids')
+        expect(Array.isArray(produto.areas_ids)).toBe(true)
+        expect(produto.areas_ids).toContain(areaId)
     })
+
 
     it('deve retornar 404 para produto inexistente', async () => {
 
