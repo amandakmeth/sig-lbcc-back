@@ -1,6 +1,9 @@
 import supabase from '../../../config/supabase.js';
 import { aplicarStatusCotacaoPorFatos } from './cotacaoStatus.js';
 import { buscarCotacaoPorId } from './cotacoes.service.js';
+import {
+    criarOrdemDeTransportePendente
+} from '../../transporte/services/ordensTransporte.service.js';
 
 export async function inserirOrcamentosNoItem({
     cotacaoId,
@@ -532,10 +535,12 @@ export async function removerOrcamento({
     return buscarCotacaoPorId(cotacaoId);
 }
 
+
 export async function escolherVencedorItem({
     cotacaoId,
     itemId,
-    orcamentoId
+    orcamentoId,
+    createdBy
 }) {
     if (!orcamentoId) {
         return {
@@ -621,7 +626,52 @@ export async function escolherVencedorItem({
         };
     }
 
-    return buscarCotacaoPorId(cotacaoId);
+    const resultado = await buscarCotacaoPorId(cotacaoId);
+
+    if (resultado.error || !resultado.data) {
+        return resultado;
+    }
+
+    const cotacao = resultado.data;
+
+    const nomeArea = String(
+        cotacao.areas?.nome ?? cotacao.area?.nome ?? ''
+    )
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toLowerCase();
+
+    if (
+        cotacao.status === 'finalizada' &&
+        nomeArea === 'transporte urbano'
+    ) {
+        const { error: erroOT } =
+            await criarOrdemDeTransportePendente({
+                cotacaoId,
+                criadoPor: createdBy ?? null
+            });
+
+        if (erroOT) {
+            console.error(
+                '[OT automática] A cotação foi finalizada, mas a OT pendente não pôde ser criada:',
+                erroOT
+            );
+
+            return {
+                data: {
+                    ...cotacao,
+                    aviso_ot:
+                        'A cotação foi finalizada, mas a OT pendente não pôde ser criada. Tente novamente ou solicite suporte.',
+                    codigo_erro_ot:
+                        erroOT.code ?? 'ERRO_CRIACAO_OT'
+                },
+                error: null
+            };
+        }
+    }
+
+    return resultado;
 }
 
 async function zerarVencedorDoItem(itemId) {

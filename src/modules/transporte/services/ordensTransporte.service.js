@@ -267,6 +267,320 @@ async function validarCotacaoTransporte(cotacaoId) {
     };
 }
 
+export async function criarOrdemDeTransportePendente({
+    cotacaoId,
+    criadoPor = null
+}) {
+    if (!cotacaoId) {
+        return {
+            data: null,
+            error: erro(
+                'O ID da cotação é obrigatório.',
+                'COTACAO_OBRIGATORIA'
+            )
+        };
+    }
+
+    const { data: contexto, error: validacaoError } =
+        await validarCotacaoTransporte(cotacaoId);
+
+    if (validacaoError) {
+        return { data: null, error: validacaoError };
+    }
+
+    const { data: existente, error: existenteError } = await supabaseAdmin
+        .from('ordens_transporte')
+        .select('*')
+        .eq('cotacao_id', cotacaoId)
+        .maybeSingle();
+
+    if (existenteError) {
+        return { data: null, error: existenteError };
+    }
+
+    // Operação idempotente: não cria uma segunda OT para a mesma cotação.
+    if (existente) {
+        return {
+            data: existente,
+            error: null,
+            existente: true
+        };
+    }
+
+    const { data: ordem, error: ordemError } = await supabaseAdmin
+        .from('ordens_transporte')
+        .insert({
+            numero: numeroOrdem(),
+            cotacao_id: cotacaoId,
+            paciente_id: contexto.cotacao.paciente_id,
+            fornecedor_id: contexto.fornecedor.id,
+            veiculo_placa: null,
+            tipo_combustivel: null,
+            quantidade_autorizada: null,
+            posto_abastecimento: null,
+            validade_ate: null,
+            observacoes: null,
+            status: 'pendente',
+            created_by: criadoPor
+        })
+        .select('*')
+        .single();
+
+    if (ordemError) {
+        // Proteção para duas tentativas simultâneas.
+        if (ordemError.code === '23505') {
+            const { data: ordemExistente, error: buscaError } =
+                await supabaseAdmin
+                    .from('ordens_transporte')
+                    .select('*')
+                    .eq('cotacao_id', cotacaoId)
+                    .maybeSingle();
+
+            if (buscaError) {
+                return { data: null, error: buscaError };
+            }
+
+            if (ordemExistente) {
+                return {
+                    data: ordemExistente,
+                    error: null,
+                    existente: true
+                };
+            }
+        }
+
+        return { data: null, error: ordemError };
+    }
+
+    return {
+        data: ordem,
+        error: null,
+        existente: false
+    };
+}
+export async function listarOrdensDeTransporte() {
+    const { data, error } = await supabaseAdmin
+        .from('ordens_transporte')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        return { data: null, error };
+    }
+
+    return { data: data || [], error: null };
+}
+
+export async function buscarOrdemDeTransporte(id) {
+    if (!id) {
+        return {
+            data: null,
+            error: erro('O ID da Ordem de Transporte é obrigatório.')
+        };
+    }
+
+    const { data: ordem, error } = await supabaseAdmin
+        .from('ordens_transporte')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+
+    if (error) {
+        return { data: null, error };
+    }
+
+    if (!ordem) {
+        return {
+            data: null,
+            error: erro(
+                'Ordem de Transporte não encontrada.',
+                'OT_NAO_ENCONTRADA'
+            )
+        };
+    }
+
+    const [
+        { data: cotacao, error: cotacaoError },
+        { data: paciente, error: pacienteError },
+        { data: fornecedor, error: fornecedorError }
+    ] = await Promise.all([
+        supabaseAdmin
+            .from('cotacoes')
+            .select('*')
+            .eq('id', ordem.cotacao_id)
+            .maybeSingle(),
+        supabaseAdmin
+            .from('pacientes')
+            .select('*')
+            .eq('id', ordem.paciente_id)
+            .maybeSingle(),
+        supabaseAdmin
+            .from('fornecedores')
+            .select('*')
+            .eq('id', ordem.fornecedor_id)
+            .maybeSingle()
+    ]);
+
+    const relacionamentoError =
+        cotacaoError || pacienteError || fornecedorError;
+
+    if (relacionamentoError) {
+        return { data: null, error: relacionamentoError };
+    }
+
+    return {
+        data: {
+            ...ordem,
+            cotacao,
+            paciente,
+            fornecedor
+        },
+        error: null
+    };
+}
+
+export async function atualizarOrdemDeTransporte({
+    id,
+    veiculoPlaca,
+    tipoCombustivel,
+    quantidadeAutorizada,
+    postoAbastecimento,
+    validadeAte,
+    observacoes
+}) {
+    if (!id) {
+        return {
+            data: null,
+            error: erro('O ID da Ordem de Transporte é obrigatório.')
+        };
+    }
+
+    const { data: atual, error: buscaError } = await supabaseAdmin
+        .from('ordens_transporte')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+
+    if (buscaError) {
+        return { data: null, error: buscaError };
+    }
+
+    if (!atual) {
+        return {
+            data: null,
+            error: erro(
+                'Ordem de Transporte não encontrada.',
+                'OT_NAO_ENCONTRADA'
+            )
+        };
+    }
+
+    if (atual.status !== 'pendente') {
+        return {
+            data: null,
+            error: erro(
+                'Somente Ordens de Transporte pendentes podem ser editadas.',
+                'OT_NAO_PENDENTE'
+            )
+        };
+    }
+
+    const campos = {
+        veiculo_placa: veiculoPlaca,
+        tipo_combustivel: tipoCombustivel,
+        quantidade_autorizada: quantidadeAutorizada,
+        posto_abastecimento: postoAbastecimento,
+        validade_ate: validadeAte,
+        observacoes
+    };
+
+    const atualizacao = {};
+
+    for (const [campo, valor] of Object.entries(campos)) {
+        if (valor !== undefined) {
+            atualizacao[campo] = valor === '' ? null : valor;
+        }
+    }
+
+    if (Object.keys(atualizacao).length === 0) {
+        return {
+            data: null,
+            error: erro('Informe pelo menos um campo para atualizar.')
+        };
+    }
+
+    if (
+        atualizacao.quantidade_autorizada !== undefined &&
+        atualizacao.quantidade_autorizada !== null
+    ) {
+        const quantidade = Number(atualizacao.quantidade_autorizada);
+
+        if (!Number.isFinite(quantidade) || quantidade <= 0) {
+            return {
+                data: null,
+                error: erro(
+                    'A quantidade autorizada precisa ser um número positivo.'
+                )
+            };
+        }
+
+        atualizacao.quantidade_autorizada = quantidade;
+    }
+
+    if (
+        atualizacao.validade_ate !== undefined &&
+        atualizacao.validade_ate !== null &&
+        (
+            !dataISOValida(atualizacao.validade_ate) ||
+            atualizacao.validade_ate < hojeISO()
+        )
+    ) {
+        return {
+            data: null,
+            error: erro(
+                'A validade precisa ser uma data válida igual ou posterior à data atual.'
+            )
+        };
+    }
+
+    for (const campo of [
+        'veiculo_placa',
+        'tipo_combustivel',
+        'posto_abastecimento',
+        'observacoes'
+    ]) {
+        if (typeof atualizacao[campo] === 'string') {
+            atualizacao[campo] = atualizacao[campo].trim() || null;
+        }
+    }
+
+    atualizacao.updated_at = new Date().toISOString();
+
+    const { data, error } = await supabaseAdmin
+        .from('ordens_transporte')
+        .update(atualizacao)
+        .eq('id', id)
+        .eq('status', 'pendente')
+        .select('*')
+        .maybeSingle();
+
+    if (error) {
+        return { data: null, error };
+    }
+
+    if (!data) {
+        return {
+            data: null,
+            error: erro(
+                'A OT deixou de estar pendente e não pôde ser atualizada.',
+                'OT_NAO_PENDENTE'
+            )
+        };
+    }
+
+    return { data, error: null };
+}
+
 export async function emitirOrdemDeTransporte({
     cotacaoId,
     veiculoPlaca = null,
@@ -280,7 +594,10 @@ export async function emitirOrdemDeTransporte({
     if (!cotacaoId || !emitidoPor) {
         return {
             data: null,
-            error: erro('Cotação e usuário emissor são obrigatórios.')
+            error: erro(
+                'Cotação e usuário emissor são obrigatórios.',
+                'DADOS_OBRIGATORIOS'
+            )
         };
     }
 
@@ -327,7 +644,7 @@ export async function emitirOrdemDeTransporte({
 
     const { data: existente, error: existenteError } = await supabaseAdmin
         .from('ordens_transporte')
-        .select('id, numero')
+        .select('*')
         .eq('cotacao_id', cotacaoId)
         .maybeSingle();
 
@@ -335,47 +652,89 @@ export async function emitirOrdemDeTransporte({
         return { data: null, error: existenteError };
     }
 
-    if (existente) {
+    if (existente && existente.status !== 'pendente') {
         return {
             data: null,
             error: erro(
-                `Já existe uma OT para esta cotação (${existente.numero}).`,
+                `Já existe uma OT para esta cotação (${existente.numero}) e ela não está pendente.`,
                 'OT_JA_EXISTE'
             )
         };
     }
 
-    const { data: ordem, error: ordemError } = await supabaseAdmin
-        .from('ordens_transporte')
-        .insert({
-            numero: numeroOrdem(),
-            cotacao_id: cotacaoId,
-            paciente_id: contexto.cotacao.paciente_id,
-            fornecedor_id: contexto.fornecedor.id,
-            veiculo_placa: veiculoPlaca?.trim() || null,
-            tipo_combustivel: tipoCombustivel.trim(),
-            quantidade_autorizada: quantidade,
-            posto_abastecimento: postoAbastecimento.trim(),
-            validade_ate: validadeAte,
-            observacoes: observacoes?.trim() || null,
-            status: 'emitida',
-            created_by: emitidoPor
-        })
-        .select('*')
-        .single();
+    const camposEmissao = {
+        veiculo_placa: veiculoPlaca?.trim() || null,
+        tipo_combustivel: tipoCombustivel.trim(),
+        quantidade_autorizada: quantidade,
+        posto_abastecimento: postoAbastecimento.trim(),
+        validade_ate: validadeAte,
+        observacoes: observacoes?.trim() || null,
+        fornecedor_id: contexto.fornecedor.id,
+        paciente_id: contexto.cotacao.paciente_id,
+        updated_at: new Date().toISOString()
+    };
 
-    if (ordemError) {
-        if (ordemError.code === '23505') {
+    let ordem;
+    let ordemCriadaAgora = false;
+
+    if (existente) {
+        // Reaproveita a OT criada automaticamente após a escolha do vencedor.
+        const { data, error: atualizacaoError } = await supabaseAdmin
+            .from('ordens_transporte')
+            .update({
+                ...camposEmissao,
+                status: 'emitida'
+            })
+            .eq('id', existente.id)
+            .eq('status', 'pendente')
+            .select('*')
+            .maybeSingle();
+
+        if (atualizacaoError) {
+            return { data: null, error: atualizacaoError };
+        }
+
+        if (!data) {
             return {
                 data: null,
                 error: erro(
-                    'Já existe uma OT para esta cotação.',
-                    'OT_JA_EXISTE'
+                    'A OT deixou de estar pendente. Atualize a consulta antes de tentar emitir novamente.',
+                    'OT_NAO_PENDENTE'
                 )
             };
         }
 
-        return { data: null, error: ordemError };
+        ordem = data;
+    } else {
+        // Compatibilidade com emissão manual quando ainda não existe OT.
+        const { data, error: criacaoError } = await supabaseAdmin
+            .from('ordens_transporte')
+            .insert({
+                numero: numeroOrdem(),
+                cotacao_id: cotacaoId,
+                ...camposEmissao,
+                status: 'emitida',
+                created_by: emitidoPor
+            })
+            .select('*')
+            .single();
+
+        if (criacaoError) {
+            if (criacaoError.code === '23505') {
+                return {
+                    data: null,
+                    error: erro(
+                        'Já existe uma OT para esta cotação. Consulte a ordem antes de tentar novamente.',
+                        'OT_JA_EXISTE'
+                    )
+                };
+            }
+
+            return { data: null, error: criacaoError };
+        }
+
+        ordem = data;
+        ordemCriadaAgora = true;
     }
 
     const { data: voucher, error: voucherError } = await supabaseAdmin
@@ -391,30 +750,49 @@ export async function emitirOrdemDeTransporte({
         .single();
 
     if (voucherError) {
-        const { error: cancelamentoError } = await supabaseAdmin
-            .from('ordens_transporte')
-            .update({
-                status: 'cancelada',
-                updated_at: new Date().toISOString(),
-                observacoes: [
-                    ordem.observacoes,
-                    'Cancelada automaticamente: falha ao registrar o voucher original.'
-                ].filter(Boolean).join('\n')
-            })
-            .eq('id', ordem.id)
-            .eq('status', 'emitida');
+        // Se a OT já existia, devolve-a ao estado pendente.
+        // Se foi criada nesta chamada, mantém o comportamento de cancelamento.
+        let erroReversao = null;
+
+        if (ordemCriadaAgora) {
+            const { error: reversaoError } = await supabaseAdmin
+                .from('ordens_transporte')
+                .update({
+                    status: 'cancelada',
+                    updated_at: new Date().toISOString(),
+                    observacoes: [
+                        ordem.observacoes,
+                        'Cancelada automaticamente: falha ao registrar o voucher original.'
+                    ].filter(Boolean).join('\n')
+                })
+                .eq('id', ordem.id)
+                .eq('status', 'emitida');
+
+            erroReversao = reversaoError;
+        } else {
+            const { error: reversaoError } = await supabaseAdmin
+                .from('ordens_transporte')
+                .update({
+                    status: 'pendente',
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', ordem.id)
+                .eq('status', 'emitida');
+
+            erroReversao = reversaoError;
+        }
 
         return {
             data: null,
             error: {
                 ...erro(
-                    cancelamentoError
-                        ? 'Falha ao criar o voucher e ao cancelar a OT. Verifique o registro antes de tentar novamente.'
-                        : 'A OT foi cancelada porque não foi possível registrar o voucher. Verifique o histórico antes de tentar novamente.',
+                    erroReversao
+                        ? 'Falha ao criar o voucher e ao reverter o estado da OT. Verifique o registro antes de tentar novamente.'
+                        : 'Não foi possível registrar o voucher original. A OT foi mantida pendente ou cancelada, conforme sua origem.',
                     'FALHA_AO_CRIAR_VOUCHER'
                 ),
                 detalhes: voucherError.message,
-                erroCancelamento: cancelamentoError?.message || null,
+                erroReversao: erroReversao?.message || null,
                 ordemId: ordem.id
             }
         };
@@ -430,6 +808,54 @@ export async function emitirOrdemDeTransporte({
         error: null
     };
 }
+
+export async function listarVouchersTransporte(ordemId) {
+    if (!ordemId) {
+        return {
+            data: null,
+            error: erro(
+                'O ID da Ordem de Transporte é obrigatório.',
+                'DADOS_OBRIGATORIOS'
+            )
+        };
+    }
+
+    const { data: ordem, error: ordemError } = await supabaseAdmin
+        .from('ordens_transporte')
+        .select('id')
+        .eq('id', ordemId)
+        .maybeSingle();
+
+    if (ordemError) {
+        return { data: null, error: ordemError };
+    }
+
+    if (!ordem) {
+        return {
+            data: null,
+            error: erro(
+                'Ordem de Transporte não encontrada.',
+                'OT_NAO_ENCONTRADA'
+            )
+        };
+    }
+
+    const { data: vouchers, error: vouchersError } = await supabaseAdmin
+        .from('ordem_transporte_vouchers')
+        .select('*')
+        .eq('ordem_transporte_id', ordemId)
+        .order('numero_via', { ascending: true });
+
+    if (vouchersError) {
+        return { data: null, error: vouchersError };
+    }
+
+    return {
+        data: vouchers ?? [],
+        error: null
+    };
+}
+
 
 export async function buscarVoucherTransporte(ordemId, voucherId) {
     if (!ordemId || !voucherId) {

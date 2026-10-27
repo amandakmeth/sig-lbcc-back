@@ -3,8 +3,13 @@ import {
     nomeArquivoVoucherTransporte
 } from '../services/voucher-transporte-pdf.service.js';
 
+
 import {
     emitirOrdemDeTransporte,
+    listarOrdensDeTransporte,
+    buscarOrdemDeTransporte,
+    atualizarOrdemDeTransporte,
+    listarVouchersTransporte,
     buscarVoucherTransporte,
     registrarEntregaVoucherTransporte,
     gerarSegundaViaVoucherTransporte
@@ -171,6 +176,128 @@ export async function postSegundaViaVoucherTransporte(req, res) {
 
         return res.status(500).json({
             erro: 'Erro interno ao emitir a segunda via do voucher.'
+        });
+    }
+}
+
+export async function getOrdensTransporte(req, res) {
+    try {
+        const { data, error } = await listarOrdensDeTransporte();
+
+        if (error) {
+            console.error('Erro ao listar OTs:', error);
+            return res.status(500).json({
+                erro: 'Não foi possível listar as Ordens de Transporte.'
+            });
+        }
+
+        return res.status(200).json(data);
+    } catch (err) {
+        console.error('Erro ao listar OTs:', err);
+        return res.status(500).json({
+            erro: 'Erro interno ao listar as Ordens de Transporte.'
+        });
+    }
+}
+
+export async function getOrdemTransporte(req, res) {
+    try {
+        const { id } = req.params;
+        const { data, error } = await buscarOrdemDeTransporte(id);
+
+        if (error) {
+            const status = error.code === 'OT_NAO_ENCONTRADA' ? 404 : 500;
+
+            return res.status(status).json({
+                erro: error.message || 'Não foi possível consultar a OT.',
+                codigo: error.code
+            });
+        }
+
+        return res.status(200).json(data);
+    } catch (err) {
+        console.error('Erro ao consultar OT:', err);
+        return res.status(500).json({
+            erro: 'Erro interno ao consultar a Ordem de Transporte.'
+        });
+    }
+}
+
+export async function patchOrdemTransporte(req, res) {
+    if (req.user?.perfil !== 'gestor') {
+        return res.status(403).json({
+            erro: 'Somente gestores podem editar Ordens de Transporte.'
+        });
+    }
+
+    try {
+        const { id } = req.params;
+
+        const {
+            veiculo_placa,
+            tipo_combustivel,
+            quantidade_autorizada,
+            posto_abastecimento,
+            validade_ate,
+            observacoes
+        } = req.body;
+
+        const { data, error } = await atualizarOrdemDeTransporte({
+            id,
+            veiculoPlaca: veiculo_placa,
+            tipoCombustivel: tipo_combustivel,
+            quantidadeAutorizada: quantidade_autorizada,
+            postoAbastecimento: posto_abastecimento,
+            validadeAte: validade_ate,
+            observacoes
+        });
+
+        if (error) {
+            const statusPorCodigo = {
+                OT_NAO_ENCONTRADA: 404,
+                OT_NAO_PENDENTE: 409
+            };
+
+            return res.status(statusPorCodigo[error.code] || 400).json({
+                erro: error.message || 'Não foi possível atualizar a OT.',
+                codigo: error.code
+            });
+        }
+
+        return res.status(200).json(data);
+    } catch (err) {
+        console.error('Erro ao atualizar OT:', err);
+        return res.status(500).json({
+            erro: 'Erro interno ao atualizar a Ordem de Transporte.'
+        });
+    }
+}
+
+export async function getVouchersTransporte(req, res) {
+    try {
+        const { id } = req.params;
+
+        const { data, error } = await listarVouchersTransporte(id);
+
+        if (error) {
+            const status = error.code === 'OT_NAO_ENCONTRADA'
+                ? 404
+                : error.code === 'DADOS_OBRIGATORIOS'
+                    ? 400
+                    : 500;
+
+            return res.status(status).json({
+                erro: error.message || 'Não foi possível listar os vouchers.',
+                codigo: error.code
+            });
+        }
+
+        return res.status(200).json(data);
+    } catch (err) {
+        console.error('Erro ao listar vouchers da OT:', err);
+
+        return res.status(500).json({
+            erro: 'Erro interno ao listar os vouchers.'
         });
     }
 }
