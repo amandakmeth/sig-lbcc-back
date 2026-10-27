@@ -37,32 +37,38 @@ const auditoria = {
     registrarAuditoria: jest.fn()
 };
 
-jest.unstable_mockModule('../src/config/supabaseAdmin.js', () => ({
-    default: {
-        rpc: jest.fn(),
-        from: jest.fn()
-    }
-}));
 
 jest.unstable_mockModule(
     '../src/modules/fornecimento/services/fornecimento.services.js',
     () => fornecimentoServices
 );
 
+const recibo = {
+    reenviarReciboFinalizacaoOF: jest.fn()
+};
+
+jest.unstable_mockModule(
+    '../src/modules/fornecimento/services/fornecimento-recibo.service.js',
+    () => recibo
+);
+
 jest.unstable_mockModule(
     '../src/modules/notificacoes/services/lembretes-fornecedor.service.js',
     () => lembretes
 );
-
 jest.unstable_mockModule(
-    '../src/modules/fornecimento/services/ordem-fornecimento-email.service.js',
-    () => email
+    '../src/config/supabaseAdmin.js',
+    () => ({
+        default: {}
+    })
+);
+jest.unstable_mockModule(
+    '../src/config/supabase.js',
+    () => ({
+        default: {}
+    })
 );
 
-jest.unstable_mockModule(
-    '../src/modules/historico_pacientes/services/auditoria.service.js',
-    () => auditoria
-);
 
 const {
     confirmarRecebimento,
