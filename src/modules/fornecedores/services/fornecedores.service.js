@@ -1,29 +1,87 @@
 import supabase from '../../../config/supabase.js'
 
+
+/* =========================
+   CONSULTAR PRODUTOS VINCULADOS
+========================= */
+const anexarProdutosIds = async (fornecedores) => {
+    if (!fornecedores || fornecedores.length === 0) {
+        return { data: fornecedores, error: null }
+    }
+
+    const fornecedoresIds = fornecedores.map(f => f.id)
+
+    const { data: vinculos, error } = await supabase
+        .from('fornecedores_produtos')
+        .select('fornecedor_id, produto_id')
+        .in('fornecedor_id', fornecedoresIds)
+
+    if (error) {
+        return { data: null, error }
+    }
+
+    const produtosPorFornecedor = new Map(
+        fornecedoresIds.map(id => [id, []])
+    )
+
+    for (const vinculo of vinculos ?? []) {
+        produtosPorFornecedor
+            .get(vinculo.fornecedor_id)
+            ?.push(vinculo.produto_id)
+    }
+
+    const fornecedoresComProdutos = fornecedores.map(fornecedor => ({
+        ...fornecedor,
+        produtos_ids: produtosPorFornecedor.get(fornecedor.id) ?? []
+    }))
+
+    return { data: fornecedoresComProdutos, error: null }
+}
+
 // =========================
 // LISTAR FORNECEDORES
 // =========================
 export const listarFornecedores = async () => {
-    return await supabase
+    const { data, error } = await supabase
         .from('fornecedores')
         .select('*')
         .order('razao_social', {
             ascending: true
         })
+
+    if (error) {
+        return { data: null, error }
+    }
+
+    return anexarProdutosIds(data)
 }
 
 // =========================
 // BUSCAR FORNECEDOR POR ID
 // =========================
-export const buscarFornecedorPorId =
-    async (id) => {
-
-    return await supabase
+export const buscarFornecedorPorId = async (id) => {
+    const { data, error } = await supabase
         .from('fornecedores')
         .select('*')
         .eq('id', id)
         .single()
+
+    if (error) {
+        return { data: null, error }
+    }
+
+    const resultado = await anexarProdutosIds([data])
+
+    if (resultado.error) {
+        return { data: null, error: resultado.error }
+    }
+
+    return {
+        data: resultado.data[0],
+        error: null
+    }
 }
+
 
 // =========================
 // CRIAR FORNECEDOR
