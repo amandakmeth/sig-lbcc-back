@@ -27,20 +27,36 @@ export const buscarAreaPorId = async (id) => {
 // =========================
 // CRIAR ÁREA
 // =========================
+
 export const inserirArea = async ({
     nome,
-    descricao
+    descricao,
+    tipo_ordem = 'OF'
 }) => {
 
-    // VERIFICA DUPLICIDADE
-    const { data: existe } = await supabase
+    // VALIDAR TIPO DE ORDEM
+    const tiposPermitidos = ['OF', 'OT', 'AMBOS']
+
+    if (!tiposPermitidos.includes(tipo_ordem)) {
+        return {
+            error: {
+                message: 'Tipo de ordem inválido. Utilize OF, OT ou AMBOS'
+            }
+        }
+    }
+
+    // VERIFICAR DUPLICIDADE
+    const { data: existe, error: erroBusca } = await supabase
         .from('areas')
         .select('id')
         .eq('nome', nome)
         .maybeSingle()
 
-    if (existe) {
+    if (erroBusca) {
+        return { data: null, error: erroBusca }
+    }
 
+    if (existe) {
         return {
             error: {
                 message: 'Área já cadastrada'
@@ -50,16 +66,16 @@ export const inserirArea = async ({
 
     const { data, error } = await supabase
         .from('areas')
-        .insert([
-            {
-                nome,
-                descricao
-            }
-        ])
+        .insert([{
+            nome,
+            descricao,
+            tipo_ordem
+        }])
         .select()
 
     return { data, error }
 }
+
 
 // =========================
 // ATUALIZAR ÁREA
@@ -81,6 +97,22 @@ export const atualizarArea = async (
             }
         }
     }
+
+    
+    // VALIDAR TIPO DE ORDEM, SE INFORMADO
+    const tiposPermitidos = ['OF', 'OT', 'AMBOS']
+
+    if (
+        dados.tipo_ordem !== undefined &&
+        !tiposPermitidos.includes(dados.tipo_ordem)
+    ) {
+        return {
+            error: {
+                message: 'Tipo de ordem inválido. Utilize OF, OT ou AMBOS'
+            }
+        }
+    }
+
 
     // VERIFICA DUPLICIDADE DE NOME
     if (dados.nome) {

@@ -1,0 +1,4 @@
+ALTER TABLE public.areas
+ADD COLUMN IF NOT EXISTS tipo_ordem VARCHAR(10)
+NOT NULL DEFAULT 'OF'
+CHECK (tipo_ordem IN ('OF', 'OT', 'AMBOS'));

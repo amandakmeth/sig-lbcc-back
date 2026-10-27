@@ -11,6 +11,21 @@ beforeAll(async () => {
 
     tokenGestor = tokens.gestor
     tokenOperador = tokens.operador
+
+    const area = await request(app)
+    .post('/areas')
+    .set('Authorization', `Bearer ${tokenGestor}`)
+    .send({
+        nome: `Área Produtos Teste ${Date.now()}`,
+        descricao: 'Área para testes de produtos'
+    })
+
+    const dadosArea = area.body[0] || area.body
+    areaId = dadosArea.id
+
+    if (area.statusCode !== 201 || !areaId) {
+        throw new Error(`Não criou área para testes: ${JSON.stringify(area.body)}`)
+    }
 })
 
 describe('Áreas - Regras de Negócio', () => {

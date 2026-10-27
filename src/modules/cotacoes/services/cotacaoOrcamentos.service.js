@@ -104,7 +104,7 @@ export async function inserirOrcamentosNoItem({
         error: itemError
     } = await supabase
         .from('cotacao_itens')
-        .select('id, cotacao_id, quantidade')
+        .select('id, cotacao_id, quantidade, produto_id')
         .eq('id', itemId)
         .single();
 
@@ -154,6 +154,43 @@ export async function inserirOrcamentosNoItem({
                     'Fornecedor inativo não pode receber orçamento'
             }
         };
+        }
+
+        // Validar se todos os fornecedores estão vinculados ao produto do item
+    if (item.produto_id) {
+        const {
+            data: vinculos,
+            error: erroVinculos
+        } = await supabase
+            .from('fornecedores_produtos')
+            .select('fornecedor_id')
+            .eq('produto_id', item.produto_id)
+            .in('fornecedor_id', fornecedorIds);
+
+        if (erroVinculos) {
+            return {
+                data: null,
+                error: erroVinculos
+            };
+        }
+
+        const fornecedoresVinculados = new Set(
+            (vinculos || []).map(vinculo => vinculo.fornecedor_id)
+        );
+
+        const fornecedoresNaoVinculados = fornecedorIds.filter(
+            fornecedorId => !fornecedoresVinculados.has(fornecedorId)
+        );
+
+        if (fornecedoresNaoVinculados.length > 0) {
+            return {
+                data: null,
+                error: {
+                    message:
+                        'Um ou mais fornecedores não estão vinculados ao produto deste item'
+                }
+            };
+        }
     }
 
     const {
