@@ -202,3 +202,258 @@ describe('RF_F11 - geração de segunda via do voucher', () => {
         expect(resultado.error).toBeTruthy();
     });
 });
+
+function configurarCenarioEmissao({
+    ordemExistente = null,
+    erroVoucher = null,
+    erroReversao = null
+} = {}) {
+    const operacoes = [];
+
+    const cotacao = {
+        id: 'cotacao-1',
+        numero: 'COT-001',
+        status: 'finalizada',
+        ativo: true,
+        data_validade: '2099-12-31',
+        paciente_id: 'paciente-1',
+        area_id: 'area-1',
+        fornecedor_vencedor_id: 'fornecedor-1'
+    };
+
+    const area = {
+        id: 'area-1',
+        nome: 'Transporte urbano',
+        descricao: 'Transporte urbano',
+        ativo: true
+    };
+
+    const itens = [
+        {
+            id: 'cotacao-item-1',
+            cotacao_id: 'cotacao-1',
+            descricao: 'Transporte',
+            quantidade: 1
+        }
+    ];
+
+    const propostas = [
+        {
+            id: 'proposta-1',
+            fornecedor_id: 'fornecedor-1',
+            cotacao_proposta_itens: [
+                {
+                    id: 'proposta-item-1',
+                    cotacao_item_id: 'cotacao-item-1',
+                    item_id: 'cotacao-item-1',
+                    selecionada: true,
+                    selecionado: true
+                }
+            ]
+        }
+    ];
+
+    const fornecedor = {
+        id: 'fornecedor-1',
+        razao_social: 'Fornecedor Teste',
+        nome_fantasia: 'Fornecedor Teste',
+        ativo: true
+    };
+
+    const ordemEmitida = {
+        id: ordemExistente?.id || 'ot-1',
+        numero: ordemExistente?.numero || 'OT-001',
+        cotacao_id: 'cotacao-1',
+        paciente_id: 'paciente-1',
+        fornecedor_id: 'fornecedor-1',
+        status: 'emitida'
+    };
+
+    const voucher = {
+        id: 'voucher-1',
+        ordem_transporte_id: ordemEmitida.id,
+        numero_via: 1,
+        tipo_via: 'original',
+        codigo: 'VT-TESTE'
+    };
+
+    const passos = [
+        {
+            tabela: 'cotacoes',
+            resultado: { data: cotacao, error: null }
+        },
+        {
+            tabela: 'areas',
+            resultado: { data: area, error: null }
+        },
+        {
+            tabela: 'cotacao_itens',
+            resultado: { data: itens, error: null }
+        },
+        {
+            tabela: 'cotacao_propostas',
+            resultado: { data: propostas, error: null }
+        },
+        {
+            tabela: 'fornecedores',
+            resultado: { data: fornecedor, error: null }
+        },
+        {
+            tabela: 'ordens_transporte',
+            resultado: { data: ordemExistente, error: null }
+        }
+    ];
+
+    if (ordemExistente) {
+        passos.push({
+            tabela: 'ordens_transporte',
+            resultado: { data: ordemEmitida, error: null }
+        });
+    } else {
+        passos.push({
+            tabela: 'ordens_transporte',
+            resultado: { data: ordemEmitida, error: null }
+        });
+    }
+
+    passos.push({
+        tabela: 'ordem_transporte_vouchers',
+        resultado: erroVoucher
+            ? { data: null, error: erroVoucher }
+            : { data: voucher, error: null }
+    });
+
+    if (erroVoucher) {
+        passos.push({
+            tabela: 'ordens_transporte',
+            resultado: { error: erroReversao }
+        });
+    }
+
+    db.from.mockImplementation((tabela) => {
+        const passo = passos.shift();
+
+        if (!passo) {
+            throw new Error(`Consulta inesperada: ${tabela}`);
+        }
+
+        if (tabela !== passo.tabela) {
+            throw new Error(
+                `Esperada a tabela "${passo.tabela}", recebida "${tabela}"`
+            );
+        }
+
+        const query = {
+            select: jest.fn(() => query),
+            eq: jest.fn(() => query),
+            insert: jest.fn((dados) => {
+                operacoes.push({ tabela, tipo: 'insert', dados });
+                return query;
+            }),
+            update: jest.fn((dados) => {
+                operacoes.push({ tabela, tipo: 'update', dados });
+                return query;
+            }),
+            maybeSingle: jest.fn(async () => passo.resultado),
+            single: jest.fn(async () => passo.resultado),
+            then: (resolve, reject) =>
+                Promise.resolve(passo.resultado).then(resolve, reject)
+        };
+
+        return query;
+    });
+
+    return { operacoes, ordemEmitida, voucher };
+}
+
+describe('RF_F11 - emissão da OT e voucher original', () => {
+    const dadosBase = {
+        cotacaoId: 'cotacao-1',
+        tipoCombustivel: 'Gasolina',
+        quantidadeAutorizada: 30,
+        postoAbastecimento: 'Posto Central',
+        validadeAte: '2099-12-31',
+        emitidoPor: 'usuario-1'
+    };
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    it('emite a OT e retorna o voucher original', async () => {
+        const { ordemEmitida, voucher } = configurarCenarioEmissao();
+
+        const resultado = await emitirOrdemDeTransporte(dadosBase);
+
+        expect(resultado.error).toBeNull();
+        expect(resultado.data.status).toBe('emitida');
+        expect(resultado.data.id).toBe(ordemEmitida.id);
+        expect(resultado.data.vouchers).toEqual([voucher]);
+        expect(db.from).toHaveBeenCalledWith(
+            'ordem_transporte_vouchers'
+        );
+    });
+
+    it('cancela a OT recém-criada se falhar a gravação do voucher', async () => {
+        const { operacoes } = configurarCenarioEmissao({
+            erroVoucher: { message: 'Falha simulada ao gravar voucher' }
+        });
+
+        const resultado = await emitirOrdemDeTransporte(dadosBase);
+
+        expect(resultado.data).toBeNull();
+        expect(resultado.error.code).toBe('FALHA_AO_CRIAR_VOUCHER');
+
+        const atualizacoes = operacoes.filter(
+            (op) => op.tabela === 'ordens_transporte'
+                && op.tipo === 'update'
+        );
+
+        expect(atualizacoes).toHaveLength(1);
+        expect(atualizacoes[0].dados.status).toBe('cancelada');
+    });
+
+    it('tenta restaurar a OT pendente se falhar a gravação do voucher', async () => {
+        const ordemPendente = {
+            id: 'ot-existente',
+            numero: 'OT-PENDENTE-001',
+            cotacao_id: 'cotacao-1',
+            paciente_id: 'paciente-1',
+            fornecedor_id: 'fornecedor-1',
+            status: 'pendente'
+        };
+
+        const { operacoes } = configurarCenarioEmissao({
+            ordemExistente: ordemPendente,
+            erroVoucher: { message: 'Falha simulada ao gravar voucher' }
+        });
+
+        const resultado = await emitirOrdemDeTransporte(dadosBase);
+
+        expect(resultado.data).toBeNull();
+        expect(resultado.error.code).toBe('FALHA_AO_CRIAR_VOUCHER');
+
+        const atualizacoes = operacoes.filter(
+            (op) => op.tabela === 'ordens_transporte'
+                && op.tipo === 'update'
+        );
+
+        expect(atualizacoes).toHaveLength(2);
+        expect(atualizacoes[1].dados.status).toBe('pendente');
+    });
+
+    it('informa quando também falha a reversão da OT', async () => {
+        configurarCenarioEmissao({
+            erroVoucher: { message: 'Falha simulada ao gravar voucher' },
+            erroReversao: { message: 'Falha simulada na reversão' }
+        });
+
+        const resultado = await emitirOrdemDeTransporte(dadosBase);
+
+        expect(resultado.data).toBeNull();
+        expect(resultado.error.code).toBe('FALHA_AO_CRIAR_VOUCHER');
+        expect(resultado.error.erroReversao).toBe(
+            'Falha simulada na reversão'
+        );
+    });
+});

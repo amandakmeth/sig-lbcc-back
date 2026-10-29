@@ -308,13 +308,13 @@ export async function reenviarReciboOF(req, res) {
 
         if (resultado.error) {
             const statusPorCodigo = {
-                RECIBO_NAO_ENCONTRADO: 404,
-                RECIBO_EM_ENVIO: 409,
-                RECIBO_NAO_REENVIAVEL: 409,
-                FALHA_ENVIO_RECIBO: 502,
-                PERSISTENCIA_ENVIO_PENDENTE: 500
-            };
-
+    RECIBO_NAO_ENCONTRADO: 404,
+    PDF_RECIBO_NAO_ENCONTRADO: 404,
+    RECIBO_EM_ENVIO: 409,
+    RECIBO_NAO_REENVIAVEL: 409,
+    FALHA_ENVIO_RECIBO: 502,
+    PERSISTENCIA_ENVIO_PENDENTE: 500
+};
             return res
                 .status(statusPorCodigo[resultado.error.code] ?? 500)
                 .json({
