@@ -1,4 +1,3 @@
-
 import supabaseAdmin from '../../../config/supabaseAdmin.js'
 import { registrarAuditoria } from '../../historico_pacientes/services/auditoria.service.js'
 import { createSmtpAdapter } from '../../notificacoes/services/smtp.adapter.js'
@@ -55,7 +54,8 @@ export async function enviarReciboFinalizacaoOF({
     ordemId,
     usuarioId = null,
     db = supabaseAdmin,
-    adapter = createSmtpAdapter()
+    adapter = createSmtpAdapter(),
+    pdfExistente = null
 }) {
     const resultadoOrdem = await db
         .from('ordens_fornecimento')
@@ -89,7 +89,10 @@ export async function enviarReciboFinalizacaoOF({
         )
     }
 
-    const pdf = buildReceiptPdf(ordem)
+    const pdf = pdfExistente
+        ? Buffer.from(pdfExistente, 'base64')
+        : buildReceiptPdf(ordem)
+
     const nomeArquivo = nomeArquivoReciboPdf(ordem)
     const agora = new Date().toISOString()
 
@@ -115,7 +118,7 @@ export async function enviarReciboFinalizacaoOF({
     }
 
     const recibo = registroResult.data
-    let envio;
+    let envio
 
     // 1. Enviar o e-mail.
     try {
@@ -144,9 +147,9 @@ export async function enviarReciboFinalizacaoOF({
                 contentType: 'application/pdf',
                 content: pdf
             }]
-        });
+        })
     } catch (exception) {
-        const mensagem = exception.message || 'Falha desconhecida no envio.';
+        const mensagem = exception.message || 'Falha desconhecida no envio.'
 
         try {
             const falha = await db
@@ -159,19 +162,19 @@ export async function enviarReciboFinalizacaoOF({
                 })
                 .eq('id', recibo.id)
                 .select('*')
-                .single();
+                .single()
 
             if (falha.error) {
                 console.error(
                     '[RF_F9] Não foi possível registrar a falha:',
                     falha.error.message
-                );
+                )
             }
         } catch (erroPersistencia) {
             console.error(
                 '[RF_F9] Erro ao persistir a falha:',
                 erroPersistencia.message
-            );
+            )
         }
 
         try {
@@ -184,12 +187,12 @@ export async function enviarReciboFinalizacaoOF({
                     destinatario_email: email,
                     erro: mensagem
                 }
-            });
+            })
         } catch (erroAuditoria) {
             console.error(
                 '[RF_F9] Falha ao auditar erro de envio:',
                 erroAuditoria.message
-            );
+            )
         }
 
         return {
@@ -202,11 +205,11 @@ export async function enviarReciboFinalizacaoOF({
                 code: 'FALHA_ENVIO_RECIBO',
                 message: mensagem
             }
-        };
+        }
     }
 
     // 2. O SMTP confirmou o envio.
-    let atualizado;
+    let atualizado
 
     try {
         atualizado = await db
@@ -221,12 +224,12 @@ export async function enviarReciboFinalizacaoOF({
             })
             .eq('id', recibo.id)
             .select('*')
-            .single();
+            .single()
     } catch (exception) {
         console.error(
             '[RF_F9] E-mail enviado, mas houve falha no banco:',
             exception.message
-        );
+        )
 
         return {
             data: {
@@ -238,14 +241,14 @@ export async function enviarReciboFinalizacaoOF({
                 code: 'PERSISTENCIA_ENVIO_PENDENTE',
                 message: 'O e-mail foi enviado, mas o status não pôde ser confirmado no banco.'
             }
-        };
+        }
     }
 
     if (atualizado.error) {
         console.error(
             '[RF_F9] E-mail enviado, mas houve falha no banco:',
             atualizado.error.message
-        );
+        )
 
         return {
             data: {
@@ -257,7 +260,7 @@ export async function enviarReciboFinalizacaoOF({
                 code: 'PERSISTENCIA_ENVIO_PENDENTE',
                 message: 'O e-mail foi enviado, mas o status não pôde ser confirmado no banco.'
             }
-        };
+        }
     }
 
     // 3. Auditar sem desfazer o envio confirmado.
@@ -272,22 +275,22 @@ export async function enviarReciboFinalizacaoOF({
                 nome_arquivo: nomeArquivo,
                 message_id: envio?.messageId || null
             }
-        });
+        })
 
         if (resultadoAuditoria?.error) {
             console.error(
                 '[RF_F9] Falha ao registrar auditoria:',
                 resultadoAuditoria.error.message
-            );
+            )
         }
     } catch (erroAuditoria) {
         console.error(
             '[RF_F9] Recibo enviado, mas a auditoria falhou:',
             erroAuditoria.message
-        );
+        )
     }
 
-    return { data: atualizado.data, error: null };
+    return { data: atualizado.data, error: null }
 }
 
 export async function reenviarReciboFinalizacaoOF({
@@ -298,7 +301,7 @@ export async function reenviarReciboFinalizacaoOF({
 }) {
     const existente = await db
         .from('ordens_fornecimento_recibos')
-        .select('id, status')
+        .select('id, status, pdf_base64')
         .eq('ordem_fornecimento_id', ordemId)
         .maybeSingle()
 
@@ -313,24 +316,32 @@ export async function reenviarReciboFinalizacaoOF({
         )
     }
 
-   if (existente.data.status === 'enviando') {
-    return erro(
-        'RECIBO_EM_ENVIO',
-        'O recibo já está em processo de envio.'
-    )
-}
+    if (existente.data.status === 'enviando') {
+        return erro(
+            'RECIBO_EM_ENVIO',
+            'O recibo já está em processo de envio.'
+        )
+    }
 
-if (existente.data.status !== 'falhou') {
-    return erro(
-        'RECIBO_NAO_REENVIAVEL',
-        'O reenvio só é permitido quando o envio anterior falhou.'
-    )
-}
+    if (existente.data.status !== 'falhou') {
+        return erro(
+            'RECIBO_NAO_REENVIAVEL',
+            'O reenvio só é permitido quando o envio anterior falhou.'
+        )
+    }
+
+    if (!existente.data.pdf_base64) {
+        return erro(
+            'PDF_RECIBO_NAO_ENCONTRADO',
+            'O PDF original do recibo não está disponível para reenvio.'
+        )
+    }
 
     return enviarReciboFinalizacaoOF({
         ordemId,
         usuarioId,
         db,
-        adapter
+        adapter,
+        pdfExistente: existente.data.pdf_base64
     })
 }

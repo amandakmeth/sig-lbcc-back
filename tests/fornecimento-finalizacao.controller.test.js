@@ -298,6 +298,27 @@ describe('reenvio do recibo da ordem de fornecimento', () => {
         expect(res.body.code).toBe('RECIBO_NAO_ENCONTRADO')
     })
 
+    it('retorna 404 quando o PDF original do recibo nao existe', async () => {
+        reciboService.reenviarReciboFinalizacaoOF.mockResolvedValue({
+            data: null,
+            error: {
+                code: 'PDF_RECIBO_NAO_ENCONTRADO',
+                message: 'O PDF original do recibo não está disponível para reenvio.'
+            }
+        })
+
+        const req = {
+            user: { id: 'gestor-1', perfil: 'gestor' },
+            params: { id: 'of-123' }
+        }
+        const res = response()
+
+        await reenviarReciboOF(req, res)
+
+        expect(res.statusCode).toBe(404)
+        expect(res.body.code).toBe('PDF_RECIBO_NAO_ENCONTRADO')
+    })
+
     it('retorna 409 quando o recibo ja esta sendo enviado', async () => {
         reciboService.reenviarReciboFinalizacaoOF.mockResolvedValue({
             data: null,

@@ -263,7 +263,8 @@ describe('RF_F9 - serviço de recibo', () => {
     it('permite reenviar o recibo quando o envio anterior falhou', async () => {
         const reciboInicial = {
             id: 'recibo-1',
-            tentativas: 1
+            tentativas: 1,
+            pdf_base64: Buffer.from('PDF de teste').toString('base64')
         };
 
         const reciboEnviado = {
@@ -276,7 +277,11 @@ describe('RF_F9 - serviço de recibo', () => {
 
         const queryRecibo = prepararConsultaRecibo(
             [reciboInicial, reciboEnviado],
-            { id: 'recibo-1', status: 'falhou' }
+            {
+                id: 'recibo-1',
+                status: 'falhou',
+                pdf_base64: reciboInicial.pdf_base64
+            }
         );
 
         db.from.mockImplementation((tabela) => {
@@ -299,7 +304,16 @@ describe('RF_F9 - serviço de recibo', () => {
             adapter
         });
 
-        expect(adapter.send).toHaveBeenCalledTimes(1);
+               expect(adapter.send).toHaveBeenCalledTimes(1);
+
+        const argumentosEnvio = adapter.send.mock.calls[0][0];
+
+        expect(argumentosEnvio.attachments).toHaveLength(1);
+        expect(Buffer.isBuffer(argumentosEnvio.attachments[0].content)).toBe(true);
+        expect(argumentosEnvio.attachments[0].content).toEqual(
+            Buffer.from(reciboInicial.pdf_base64, 'base64')
+        );
+
         expect(resultado.error).toBeNull();
         expect(resultado.data.status).toBe('enviado');
     });
@@ -349,4 +363,29 @@ describe('RF_F9 - serviço de recibo', () => {
         expect(resultado.error.code).toBe('RECIBO_NAO_REENVIAVEL');
         expect(adapter.send).not.toHaveBeenCalled();
     });
+    
+    it('bloqueia o reenvio quando o PDF original não está disponível', async () => {
+        const queryRecibo = prepararConsultaRecibo([], {
+            id: 'recibo-1',
+            status: 'falhou',
+            pdf_base64: null
+        });
+
+        db.from.mockReturnValue(queryRecibo);
+
+        const adapter = {
+            send: jest.fn()
+        };
+
+        const resultado = await reenviarReciboFinalizacaoOF({
+            ordemId: 'of-1',
+            usuarioId: 'gestor-1',
+            db,
+            adapter
+        });
+
+        expect(resultado.error.code).toBe('PDF_RECIBO_NAO_ENCONTRADO');
+        expect(adapter.send).not.toHaveBeenCalled();
+    });
+
 });
