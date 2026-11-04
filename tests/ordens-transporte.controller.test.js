@@ -493,6 +493,28 @@ describe('RF_F11 - controller de Ordem de Transporte', () => {
         expect(res.status).toHaveBeenCalledWith(409);
     });
 
+    it('retorna 409 quando o voucher foi invalidado por RF_F13', async () => {
+        registrarEntregaVoucherTransporte.mockResolvedValue({
+            data: null,
+            error: {
+                code: 'VOUCHER_INVALIDADO',
+                message: 'Este voucher foi invalidado e não pode mais ser entregue.'
+            }
+        });
+
+        const req = {
+            user: { id: 'usuario-1' },
+            params: { id: 'ot-1', voucherId: 'voucher-1' },
+            body: { destinatario: 'Lucas' }
+        };
+        const res = criarResponse();
+
+        await postEntregaVoucherTransporte(req, res);
+
+        expect(res.status).toHaveBeenCalledWith(409);
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ codigo: 'VOUCHER_INVALIDADO' }));
+    });
+
     it('gera segunda via e retorna 201', async () => {
         const resultado = {
             id: 'ot-1',

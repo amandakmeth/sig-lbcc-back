@@ -365,8 +365,17 @@ export async function finalizarOrdem(req, res) {
     });
 
     if (resultado.error) {
-        const status = resultado.error.message?.includes('nao encontrada') ? 404 : 400;
-        return res.status(status).json({ message: resultado.error.message });
+        const status = resultado.error.code === 'OF_NAO_ENCONTRADA'
+            ? 404
+            : resultado.error.code === 'DIVERGENCIA_IMPEDITIVA'
+                ? 409
+                : 400;
+        return res.status(status).json({
+            message: resultado.error.message,
+            code: resultado.error.code,
+            divergencias: resultado.error.divergencias,
+            itens_pendentes: resultado.error.itensPendentes
+        });
     }
 
     return res.json(resultado.data);

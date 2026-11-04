@@ -692,59 +692,6 @@ export async function finalizarOrdemDeFornecimento({
   }
 
   // RF_F9: exige atendimento integral de todos os itens.
-  const { data: itens, error: itensError } = await supabase
-    .from("ordem_fornecimento_itens")
-    .select(
-      "id, descricao, quantidade_solicitada, quantidade_entregue"
-    )
-    .eq("ordem_fornecimento_id", id);
-
-  if (itensError) {
-    return {
-      data: null,
-      error: {
-        message: "Nao foi possivel validar a entrega dos itens da ordem",
-        cause: itensError
-      }
-    };
-  }
-
-  if (!itens || itens.length === 0) {
-    return {
-      data: null,
-      error: {
-        message: "A ordem nao pode ser finalizada sem itens cadastrados"
-      }
-    };
-  }
-
-  const itemPendente = itens.find((item) => {
-    const solicitada = Number(item.quantidade_solicitada);
-    const entregue = Number(item.quantidade_entregue);
-
-    if (
-      !Number.isFinite(solicitada) ||
-      !Number.isFinite(entregue) ||
-      solicitada < 0 ||
-      entregue < 0
-    ) {
-      return true;
-    }
-
-    return Math.abs(solicitada - entregue) > 1e-9;
-  });
-
-  if (itemPendente) {
-    return {
-      data: null,
-      error: {
-        code: "ENTREGA_INCOMPLETA",
-        message:
-          "A ordem nao pode ser finalizada: existem itens com entrega incompleta ou quantidade divergente."
-      }
-    };
-  }
-
   const responsaveis = await obterResponsaveis(id);
 
   if (responsaveis.error) {
@@ -752,31 +699,24 @@ export async function finalizarOrdemDeFornecimento({
   }
 
   // Finalização condicional para evitar alteração concorrente de status.
-  const { data: atualizada, error: updateError } = await supabase
-    .from("ordens_fornecimento")
-    .update({
-      status: "finalizada",
-      data_finalizacao: new Date().toISOString(),
-      atualizado_por: atualizadoPor || null
-    })
-    .eq("id", id)
-    .in("status", statusPermitidos)
-    .select("id")
-    .maybeSingle();
+  const { data: finalizacao, error: updateError } = await supabaseAdmin.rpc(
+    "finalizar_ordem_fornecimento_com_divergencias",
+    { p_ordem_id: id, p_usuario_id: atualizadoPor || null }
+  );
 
-  if (updateError) {
-    return { data: null, error: updateError };
-  }
-
-  if (!atualizada) {
+  if (updateError) return { data: null, error: updateError };
+  if (!finalizacao?.ok) {
     return {
       data: null,
       error: {
-        message:
-          "A ordem nao pode ser finalizada: seu status foi alterado ou nao permite finalizacao."
+        code: finalizacao?.code,
+        message: finalizacao?.message || "A ordem não pode ser finalizada.",
+        divergencias: finalizacao?.divergencias,
+        itensPendentes: finalizacao?.itens_pendentes
       }
     };
   }
+  if (finalizacao.ja_finalizada) return await buscarOrdemDeFornecimento(id);
 
   const eventoError = await registrarAlteracaoDePrazo({
     ordem: {

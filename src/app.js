@@ -18,6 +18,12 @@ app.get('/', (req, res) => {
 app.use(routes)
 
 app.use((err, req, res, next) => {
+    if (err?.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ erro: 'Cada evidência deve ter no máximo 5 MB.', codigo: 'ARQUIVO_MUITO_GRANDE' })
+    }
+    if (err?.code === 'LIMIT_FILE_COUNT') {
+        return res.status(400).json({ erro: 'Anexe no máximo cinco evidências por registro.', codigo: 'EVIDENCIAS_LIMITE' })
+    }
     console.error(err.stack)
     res.status(500).json({ erro: 'Erro interno do servidor' })
 })
