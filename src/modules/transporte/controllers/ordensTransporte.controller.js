@@ -123,6 +123,7 @@ export async function postEntregaVoucherTransporte(req, res) {
             const statusPorCodigo = {
                 OT_NAO_ENCONTRADA: 404,
                 VOUCHER_NAO_ENCONTRADO: 404,
+                VOUCHER_INVALIDADO: 409,
                 DESTINATARIO_OBRIGATORIO: 400,
                 USUARIO_OBRIGATORIO: 401,
                 OT_NAO_PODE_SER_ENTREGUE: 409,

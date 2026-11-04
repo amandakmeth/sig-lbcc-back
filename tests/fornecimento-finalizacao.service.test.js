@@ -16,6 +16,7 @@ let itens;
 let erroBusca;
 let erroItens;
 let atualizacaoExecutada;
+let rpcMock;
 
 const builder = {
     select: jest.fn(() => builder),
@@ -34,9 +35,7 @@ const builder = {
     })),
 
     maybeSingle: jest.fn(async () => ({
-        data: atualizacaoExecutada
-            ? { id: 'of-1' }
-            : ordem,
+        data: ordem,
         error: null
     })),
 
@@ -96,7 +95,7 @@ jest.unstable_mockModule(
 
 jest.unstable_mockModule(
     '../src/config/supabaseAdmin.js',
-    () => ({ default: { rpc: jest.fn() } })
+    () => ({ default: { rpc: (...args) => rpcMock(...args) } })
 );
 
 jest.unstable_mockModule(
@@ -137,10 +136,19 @@ describe('RF_F9 - finalização de Ordem de Fornecimento', () => {
         erroBusca = null;
         erroItens = null;
         atualizacaoExecutada = false;
+        rpcMock = jest.fn(async (_functionName, args) => {
+            atualizacaoExecutada = true;
+            ordem = { ...ordem, status: 'finalizada' };
+            return { data: { ok: true, ordem }, error: null };
+        });
     });
 
     it('bloqueia a finalização quando há entrega incompleta', async () => {
         itens[0].quantidade_entregue = 5;
+        rpcMock.mockResolvedValue({
+            data: { ok: false, code: 'ENTREGA_INCOMPLETA', message: 'Existem itens com saldo pendente.' },
+            error: null
+        });
 
         const resultado = await finalizarOrdemDeFornecimento({
             id: 'of-1',
@@ -149,7 +157,7 @@ describe('RF_F9 - finalização de Ordem de Fornecimento', () => {
 
         expect(resultado.data).toBeNull();
         expect(resultado.error.code).toBe('ENTREGA_INCOMPLETA');
-        expect(atualizacaoExecutada).toBe(false);
+        expect(rpcMock).toHaveBeenCalledTimes(1);
     });
 
     it('bloqueia a finalização de uma ordem cancelada', async () => {
@@ -181,6 +189,10 @@ describe('RF_F9 - finalização de Ordem de Fornecimento', () => {
 
     it('bloqueia a finalização quando não existem itens', async () => {
         itens = [];
+        rpcMock.mockResolvedValue({
+            data: { ok: false, code: 'OF_SEM_ITENS', message: 'A ordem não pode ser finalizada sem itens cadastrados.' },
+            error: null
+        });
 
         const resultado = await finalizarOrdemDeFornecimento({
             id: 'of-1',
@@ -204,11 +216,9 @@ describe('RF_F9 - finalização de Ordem de Fornecimento', () => {
 
         expect(atualizacaoExecutada).toBe(true);
 
-        expect(builder.update).toHaveBeenCalledWith(
-            expect.objectContaining({
-                status: 'finalizada',
-                atualizado_por: 'operador-1'
-            })
+        expect(rpcMock).toHaveBeenCalledWith(
+            'finalizar_ordem_fornecimento_com_divergencias',
+            { p_ordem_id: 'of-1', p_usuario_id: 'operador-1' }
         );
 
         expect(resultado.error).toBeNull();

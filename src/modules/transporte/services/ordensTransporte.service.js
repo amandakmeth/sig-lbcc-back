@@ -984,6 +984,7 @@ export async function registrarEntregaVoucherTransporte({
             'DESTINATARIO_OBRIGATORIO',
             'OT_NAO_ENCONTRADA',
             'VOUCHER_NAO_ENCONTRADO',
+            'VOUCHER_INVALIDADO',
             'OT_NAO_PODE_SER_ENTREGUE',
             'OT_VENCIDA',
             'VOUCHER_JA_ENTREGUE'
@@ -1000,6 +1001,7 @@ export async function registrarEntregaVoucherTransporte({
                         DESTINATARIO_OBRIGATORIO: 'O destinatário é obrigatório.',
                         OT_NAO_ENCONTRADA: 'Ordem de Transporte não encontrada.',
                         VOUCHER_NAO_ENCONTRADO: 'Voucher não encontrado para esta OT.',
+                        VOUCHER_INVALIDADO: 'Este voucher foi invalidado e não pode mais ser entregue.',
                         OT_NAO_PODE_SER_ENTREGUE: 'A OT não está em um estado que permita registrar a entrega.',
                         OT_VENCIDA: 'A validade da OT expirou.',
                         VOUCHER_JA_ENTREGUE: 'Este voucher já foi entregue.'
