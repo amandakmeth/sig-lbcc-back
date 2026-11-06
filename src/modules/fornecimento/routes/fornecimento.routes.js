@@ -14,7 +14,9 @@ import {
     reenviarEmailOrdem,
     reenviarReciboOF,
     baixarPdfOrdem,
-    atualizarObservacoes
+    atualizarObservacoes,
+    solicitarCancelamento,
+    decidirCancelamento
 } from '../controller/fornecimento.controller.js';
 
 import { authMiddleware } from '../../auth/middlewares/auth.middleware.js';
@@ -277,3 +279,9 @@ router.get(
 
 
 export default router;
+
+
+// Solicitação de cancelamento de OF ou OT (RF_F14)
+router.post('/cancelamentos/solicitar', solicitarCancelamento);
+
+router.patch('/cancelamentos/:solicitacaoId/decidir', decidirCancelamento);

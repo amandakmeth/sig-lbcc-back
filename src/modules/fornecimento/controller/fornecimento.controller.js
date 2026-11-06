@@ -27,6 +27,10 @@ import {
 } from '../services/ordem-fornecimento-email.service.js';
 
 import { registrarOcorrencia } from '../../historico_pacientes/services/auditoria.service.js';
+import {
+    solicitarCancelamentoOrdem,
+    decidirCancelamentoOrdem
+} from '../services/cancelamento-notificacao.service.js';
 
 
 // =========================
@@ -480,4 +484,107 @@ export async function reenviarLembreteFornecedor(req, res) {
     if (atualizado.error) return res.status(500).json({ message: atualizado.error.message });
 
     return res.json(atualizado.data);
+}
+
+
+export async function solicitarCancelamento(req, res) {
+    try {
+        const {
+            ordem_fornecimento_id = null,
+            ordem_transporte_id = null,
+            motivo,
+            necessidade_paciente
+        } = req.body
+
+        if ((!ordem_fornecimento_id && !ordem_transporte_id) ||
+            (ordem_fornecimento_id && ordem_transporte_id)) {
+            return res.status(400).json({
+                erro: 'Informe somente uma ordem: fornecimento ou transporte.'
+            })
+        }
+
+        if (typeof motivo !== 'string' || !motivo.trim()) {
+            return res.status(400).json({ erro: 'O motivo é obrigatório.' })
+        }
+
+        if (!['continua', 'encerrada'].includes(necessidade_paciente)) {
+            return res.status(400).json({
+                erro: 'Informe se a necessidade do paciente continua ou foi encerrada.'
+            })
+        }
+
+        const resultado = await solicitarCancelamentoOrdem({
+            ordemFornecimentoId: ordem_fornecimento_id,
+            ordemTransporteId: ordem_transporte_id,
+            motivo: motivo.trim(),
+            necessidadePaciente: necessidade_paciente,
+            usuarioId: req.user.id
+        })
+
+        return res.status(201).json({
+            sucesso: true,
+            ...resultado
+        })
+    } catch (error) {
+        console.error('Erro ao solicitar cancelamento da ordem:', error)
+        return res.status(400).json({
+            erro: error.message || 'Não foi possível solicitar o cancelamento.'
+        })
+    }
+}
+
+
+export async function decidirCancelamento(req, res) {
+    try {
+        if (req.user?.perfil !== 'gestor') {
+            return res.status(403).json({
+                erro: 'Somente gestores podem decidir solicitações de cancelamento.'
+            })
+        }
+
+        const { solicitacaoId } = req.params
+        const {
+            aprovado,
+            justificativa,
+            gerar_recotacao = false,
+            data_validade_recotacao = null
+        } = req.body
+
+        if (typeof aprovado !== 'boolean') {
+            return res.status(400).json({
+                erro: 'Informe se a solicitação foi aprovada ou recusada.'
+            })
+        }
+
+        if (typeof justificativa !== 'string' || !justificativa.trim()) {
+            return res.status(400).json({
+                erro: 'A justificativa da decisão é obrigatória.'
+            })
+        }
+
+        if (typeof gerar_recotacao !== 'boolean') {
+            return res.status(400).json({
+                erro: 'O campo gerar_recotacao deve ser verdadeiro ou falso.'
+            })
+        }
+
+        const resultado = await decidirCancelamentoOrdem({
+            solicitacaoId,
+            aprovado,
+            justificativa: justificativa.trim(),
+            gerarRecotacao: gerar_recotacao,
+            dataValidadeRecotacao: data_validade_recotacao,
+            usuarioId: req.user.id
+        })
+
+        return res.status(200).json({
+            sucesso: true,
+            resultado
+        })
+    } catch (error) {
+        console.error('Erro ao decidir cancelamento da ordem:', error)
+        return res.status(400).json({
+            erro: error.message || 'Não foi possível registrar a decisão.'
+        })
+    }
 }
