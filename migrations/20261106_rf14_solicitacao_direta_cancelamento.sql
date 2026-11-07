@@ -19,6 +19,8 @@ SET search_path = public
 AS $function$
 DECLARE
     v_status TEXT;
+    v_paciente_id UUID;
+    v_numero_ordem TEXT;
     v_solicitacao public.solicitacoes_cancelamento_ordem%ROWTYPE;
 BEGIN
     IF (
@@ -31,19 +33,21 @@ BEGIN
     END IF;
 
     IF COALESCE(trim(p_motivo), '') = ''
-       OR p_usuario_id IS NULL
-       OR p_necessidade_paciente IS NULL
-       OR p_necessidade_paciente NOT IN ('continua', 'encerrada') THEN
+        OR p_usuario_id IS NULL
+        OR p_necessidade_paciente IS NULL
+        OR p_necessidade_paciente NOT IN ('continua', 'encerrada') THEN
         RETURN jsonb_build_object('ok', false, 'code', 'DADOS_OBRIGATORIOS',
             'message', 'Informe o motivo e a situação da necessidade do paciente.');
     END IF;
 
     IF p_ordem_fornecimento_id IS NOT NULL THEN
-        SELECT status INTO v_status
+        SELECT status, paciente_id, numero
+        INTO v_status, v_paciente_id, v_numero_ordem
         FROM public.ordens_fornecimento
         WHERE id = p_ordem_fornecimento_id FOR UPDATE;
     ELSE
-        SELECT status INTO v_status
+        SELECT status, paciente_id, numero
+        INTO v_status, v_paciente_id, v_numero_ordem
         FROM public.ordens_transporte
         WHERE id = p_ordem_transporte_id FOR UPDATE;
     END IF;
@@ -67,6 +71,42 @@ BEGIN
         trim(p_motivo), p_usuario_id, p_necessidade_paciente
     )
     RETURNING * INTO v_solicitacao;
+
+    INSERT INTO public.historico_pacientes (
+        paciente_id, tipo_evento, descricao, referencia_id,
+        usuario_id, idempotency_key
+    )
+    VALUES (
+        v_paciente_id,
+        'ALTERACAO_STATUS',
+        'Solicitação de cancelamento da ordem ' || v_numero_ordem ||
+            ' aberta. Motivo: ' || v_solicitacao.motivo,
+        COALESCE(v_solicitacao.ordem_fornecimento_id, v_solicitacao.ordem_transporte_id),
+        p_usuario_id,
+        'cancelamento:' || v_solicitacao.id::TEXT || ':historico_solicitacao'
+    )
+    ON CONFLICT (idempotency_key) DO NOTHING;
+
+    INSERT INTO public.auditoria_eventos (
+        entidade_tipo, entidade_id, acao, usuario_id, dados, idempotency_key
+    )
+    VALUES (
+        CASE
+            WHEN p_ordem_fornecimento_id IS NOT NULL THEN 'ordem_fornecimento'
+            ELSE 'ordem_transporte'
+        END,
+        COALESCE(p_ordem_fornecimento_id, p_ordem_transporte_id),
+        'CANCELAMENTO_SOLICITADO_RF_F14',
+        p_usuario_id,
+        jsonb_build_object(
+            'solicitacao_id', v_solicitacao.id,
+            'numero_ordem', v_numero_ordem,
+            'motivo', v_solicitacao.motivo,
+            'necessidade_paciente', v_solicitacao.necessidade_paciente
+        ),
+        'cancelamento:' || v_solicitacao.id::TEXT || ':solicitacao'
+    )
+    ON CONFLICT (idempotency_key) DO NOTHING;
 
     RETURN jsonb_build_object('ok', true, 'solicitacao', to_jsonb(v_solicitacao));
 
@@ -124,8 +164,8 @@ BEGIN
     END IF;
 
     IF p_aprovado IS NULL
-       OR COALESCE(trim(p_justificativa), '') = ''
-       OR p_usuario_id IS NULL THEN
+        OR COALESCE(trim(p_justificativa), '') = ''
+        OR p_usuario_id IS NULL THEN
         RETURN jsonb_build_object(
             'ok', false, 'code', 'DADOS_OBRIGATORIOS',
             'message', 'Informe a decisão e sua justificativa.'
@@ -151,8 +191,18 @@ BEGIN
         );
     END IF;
 
+    IF v_solicitacao.ordem_fornecimento_id IS NOT NULL THEN
+        SELECT paciente_id INTO v_paciente_id
+        FROM public.ordens_fornecimento
+        WHERE id = v_solicitacao.ordem_fornecimento_id;
+    ELSE
+        SELECT paciente_id INTO v_paciente_id
+        FROM public.ordens_transporte
+        WHERE id = v_solicitacao.ordem_transporte_id;
+    END IF;
+
     IF p_aprovado
-       AND v_solicitacao.ordem_fornecimento_id IS NOT NULL THEN
+        AND v_solicitacao.ordem_fornecimento_id IS NOT NULL THEN
 
         SELECT * INTO v_ordem
         FROM public.ordens_fornecimento
@@ -175,6 +225,34 @@ BEGIN
 
         v_paciente_id := v_ordem.paciente_id;
 
+        IF EXISTS (
+            SELECT 1
+            FROM public.ordem_fornecimento_itens oi
+            WHERE oi.ordem_fornecimento_id = v_ordem.id
+        )
+        AND NOT EXISTS (
+            SELECT 1
+            FROM public.ordem_fornecimento_itens oi
+            WHERE oi.ordem_fornecimento_id = v_ordem.id
+                AND oi.quantidade_solicitada > (
+                    COALESCE(oi.quantidade_entregue_legado, 0)
+                    + COALESCE((
+                        SELECT SUM(ci.quantidade)
+                        FROM public.comprovacoes_of_itens ci
+                        JOIN public.comprovacoes_of c
+                            ON c.id = ci.comprovacao_id
+                        WHERE ci.ordem_fornecimento_item_id = oi.id
+                        AND c.ordem_fornecimento_id = v_ordem.id
+                    ), 0)
+                )
+        ) THEN
+            RETURN jsonb_build_object(
+                'ok', false,
+                'code', 'OF_TOTALMENTE_COMPROVADA',
+                'message', 'Não é possível cancelar uma ordem com todos os itens integralmente comprovados.'
+            );
+        END IF;
+
         IF p_gerar_recotacao THEN
             SELECT * INTO v_cotacao
             FROM public.cotacoes
@@ -191,7 +269,7 @@ BEGIN
 
             IF v_validade < CURRENT_DATE THEN
                 IF p_data_validade_recotacao IS NULL
-                   OR p_data_validade_recotacao <= CURRENT_DATE THEN
+                    OR p_data_validade_recotacao <= CURRENT_DATE THEN
                     RETURN jsonb_build_object(
                         'ok', false, 'code', 'NOVA_VALIDADE_OBRIGATORIA',
                         'message', 'Informe uma nova data de validade futura para a recotação.'
@@ -205,7 +283,17 @@ BEGIN
                 SELECT 1
                 FROM public.ordem_fornecimento_itens oi
                 WHERE oi.ordem_fornecimento_id = v_ordem.id
-                  AND oi.quantidade_solicitada > COALESCE(oi.quantidade_entregue, 0)
+                    AND oi.quantidade_solicitada > (
+                        COALESCE(oi.quantidade_entregue_legado, 0)
+                        + COALESCE((
+                            SELECT SUM(ci.quantidade)
+                            FROM public.comprovacoes_of_itens ci
+                            JOIN public.comprovacoes_of c
+                                ON c.id = ci.comprovacao_id
+                            WHERE ci.ordem_fornecimento_item_id = oi.id
+                            AND c.ordem_fornecimento_id = v_ordem.id
+                        ), 0)
+                    )
             ) INTO v_itens_restantes;
 
             IF NOT v_itens_restantes THEN
@@ -255,7 +343,17 @@ BEGIN
                 v_nova_cotacao_id,
                 oi.produto_id,
                 oi.descricao,
-                oi.quantidade_solicitada - COALESCE(oi.quantidade_entregue, 0),
+                oi.quantidade_solicitada - (
+                    COALESCE(oi.quantidade_entregue_legado, 0)
+                    + COALESCE((
+                        SELECT SUM(ci2.quantidade)
+                        FROM public.comprovacoes_of_itens ci2
+                        JOIN public.comprovacoes_of c
+                            ON c.id = ci2.comprovacao_id
+                        WHERE ci2.ordem_fornecimento_item_id = oi.id
+                            AND c.ordem_fornecimento_id = v_ordem.id
+                    ), 0)
+                ),
                 oi.unidade,
                 ci.especificacoes,
                 COALESCE(ci.ordem, 0)
@@ -263,7 +361,17 @@ BEGIN
             LEFT JOIN public.cotacao_itens ci
                 ON ci.id = oi.cotacao_item_id
             WHERE oi.ordem_fornecimento_id = v_ordem.id
-              AND oi.quantidade_solicitada > COALESCE(oi.quantidade_entregue, 0);
+                AND oi.quantidade_solicitada > (
+                    COALESCE(oi.quantidade_entregue_legado, 0)
+                    + COALESCE((
+                        SELECT SUM(ci2.quantidade)
+                        FROM public.comprovacoes_of_itens ci2
+                        JOIN public.comprovacoes_of c
+                            ON c.id = ci2.comprovacao_id
+                        WHERE ci2.ordem_fornecimento_item_id = oi.id
+                        AND c.ordem_fornecimento_id = v_ordem.id
+                    ), 0)
+                );
 
             GET DIAGNOSTICS v_itens_criados = ROW_COUNT;
 
@@ -279,7 +387,7 @@ BEGIN
         WHERE id = v_ordem.id;
 
     ELSIF p_aprovado
-       AND v_solicitacao.ordem_transporte_id IS NOT NULL THEN
+        AND v_solicitacao.ordem_transporte_id IS NOT NULL THEN
 
         IF p_gerar_recotacao THEN
             RETURN jsonb_build_object(
@@ -292,7 +400,7 @@ BEGIN
         SET status = 'cancelada',
             updated_at = NOW()
         WHERE id = v_solicitacao.ordem_transporte_id
-          AND status NOT IN ('finalizada', 'cancelada')
+            AND status NOT IN ('finalizada', 'cancelada')
         RETURNING paciente_id INTO v_paciente_id;
 
         IF NOT FOUND THEN
@@ -307,7 +415,7 @@ BEGIN
             invalidado_por = p_usuario_id,
             motivo_invalidacao = trim(p_justificativa)
         WHERE ordem_transporte_id = v_solicitacao.ordem_transporte_id
-          AND invalidado_em IS NULL;
+            AND invalidado_em IS NULL;
     END IF;
 
     UPDATE public.solicitacoes_cancelamento_ordem
@@ -318,22 +426,24 @@ BEGIN
     WHERE id = p_solicitacao_id
     RETURNING * INTO v_solicitacao;
 
-    IF p_aprovado THEN
-        INSERT INTO public.historico_pacientes (
-            paciente_id, tipo_evento, descricao,
-            referencia_id, usuario_id, idempotency_key
-        )
-        VALUES (
-            v_paciente_id,
-            'ALTERACAO_STATUS',
-            'Cancelamento aprovado. Motivo: ' || v_solicitacao.motivo ||
-                '. Justificativa: ' || trim(p_justificativa),
-            COALESCE(v_solicitacao.ordem_fornecimento_id, v_solicitacao.ordem_transporte_id),
-            p_usuario_id,
-            'cancelamento:' || v_solicitacao.id::TEXT || ':historico'
-        )
-        ON CONFLICT (idempotency_key) DO NOTHING;
-    END IF;
+    INSERT INTO public.historico_pacientes (
+        paciente_id, tipo_evento, descricao,
+        referencia_id, usuario_id, idempotency_key
+    )
+    VALUES (
+        v_paciente_id,
+        'ALTERACAO_STATUS',
+        CASE
+            WHEN p_aprovado THEN 'Cancelamento aprovado.'
+            ELSE 'Solicitação de cancelamento recusada.'
+        END ||
+        ' Motivo: ' || v_solicitacao.motivo ||
+        '. Justificativa: ' || trim(p_justificativa),
+        COALESCE(v_solicitacao.ordem_fornecimento_id, v_solicitacao.ordem_transporte_id),
+        p_usuario_id,
+        'cancelamento:' || v_solicitacao.id::TEXT || ':historico_decisao'
+    )
+    ON CONFLICT (idempotency_key) DO NOTHING;
 
     INSERT INTO public.auditoria_eventos (
         entidade_tipo, entidade_id, acao, usuario_id, dados, idempotency_key
