@@ -1,3 +1,4 @@
+
 import express from 'express';
 
 import {
@@ -33,7 +34,6 @@ router.use(authMiddleware);
  *   description: Gestão de ordens de fornecimento
  */
 
-
 // =========================
 // GERAR ORDENS DE FORNECIMENTO
 // =========================
@@ -65,12 +65,10 @@ router.use(authMiddleware);
  *       500:
  *         description: Erro interno ao gerar ordens de fornecimento
  */
-
 router.post(
     '/cotacoes/:cotacaoId/gerar',
     gerarOrdens
 );
-
 
 // =========================
 // LISTAR ORDENS DE FORNECIMENTO
@@ -93,7 +91,6 @@ router.post(
  *       500:
  *         description: Erro interno ao listar ordens de fornecimento
  */
-
 router.get(
     '/',
     listarOrdens
@@ -103,7 +100,6 @@ router.get(
     '/gestores-responsaveis',
     listarGestores
 );
-
 
 // =========================
 // CONFIRMAR RECEBIMENTO
@@ -151,7 +147,6 @@ router.get(
  *       500:
  *         description: Erro interno ao confirmar recebimento
  */
-
 router.patch(
     '/:id/confirmar-recebimento',
     confirmarRecebimento
@@ -231,15 +226,26 @@ router.post(
     '/:id/email/reenvio',
     reenviarEmailOrdem
 );
+
 router.post(
     '/:id/recibo/reenvio',
     reenviarReciboOF
 );
+
 router.get(
     '/:id/pdf',
     baixarPdfOrdem
 );
 
+// =========================
+// CANCELAMENTOS DIRETOS (RF_F14)
+// =========================
+
+router.get('/cancelamentos', listarCancelamentosDiretos);
+
+router.post('/cancelamentos/solicitar', solicitarCancelamento);
+
+router.patch('/cancelamentos/:solicitacaoId/decidir', decidirCancelamento);
 
 // =========================
 // BUSCAR ORDEM DE FORNECIMENTO
@@ -272,19 +278,9 @@ router.get(
  *       500:
  *         description: Erro interno ao buscar ordem de fornecimento
  */
-
 router.get(
     '/:id',
     buscarOrdem
 );
 
-
 export default router;
-
-
-// Solicitação de cancelamento de OF ou OT (RF_F14)
-router.get('/cancelamentos', listarCancelamentosDiretos);
-
-router.post('/cancelamentos/solicitar', solicitarCancelamento);
-
-router.patch('/cancelamentos/:solicitacaoId/decidir', decidirCancelamento);
