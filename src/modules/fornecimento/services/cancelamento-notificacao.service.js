@@ -8,6 +8,21 @@ import {
 
 import { listarGestoresResponsaveis } from './fornecimento.services.js'
 
+export async function listarSolicitacoesCancelamentoDireto() {
+    const { data, error } = await supabaseAdmin
+        .from('solicitacoes_cancelamento_ordem')
+        .select('*')
+        .is('divergencia_id', null)
+        .order('solicitado_em', { ascending: false })
+        .limit(200)
+
+    if (error) {
+        throw new Error('Não foi possível listar as solicitações diretas de cancelamento.')
+    }
+
+    return data || []
+}
+
 export async function notificarGestoresCancelamento({
     solicitacaoId,
     ordemId,
