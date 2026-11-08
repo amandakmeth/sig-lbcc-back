@@ -28,6 +28,7 @@ import {
 
 import { registrarOcorrencia } from '../../historico_pacientes/services/auditoria.service.js';
 import {
+    listarSolicitacoesCancelamentoDireto,
     solicitarCancelamentoOrdem,
     decidirCancelamentoOrdem
 } from '../services/cancelamento-notificacao.service.js';
@@ -486,6 +487,26 @@ export async function reenviarLembreteFornecedor(req, res) {
     return res.json(atualizado.data);
 }
 
+export async function listarCancelamentosDiretos(req, res) {
+    try {
+        const perfisPermitidos = ['admin', 'gestor', 'operador'];
+
+        if (!perfisPermitidos.includes(req.user?.perfil)) {
+            return res.status(403).json({
+                erro: 'Apenas administrador, gestor ou operador pode consultar solicitações de cancelamento.'
+            });
+        }
+
+        const resultado = await listarSolicitacoesCancelamentoDireto();
+
+        return res.status(200).json(resultado);
+    } catch (error) {
+        console.error('Erro ao listar solicitações diretas de cancelamento:', error);
+        return res.status(500).json({
+            erro: error.message || 'Não foi possível listar as solicitações de cancelamento.'
+        });
+    }
+}
 
 export async function solicitarCancelamento(req, res) {
     try {
