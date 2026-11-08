@@ -216,6 +216,16 @@ export async function decidirCancelamentoOrdem({
     if (!data?.ok) {
         throw new Error(data?.message || 'A decisão não foi concluída.')
     }
+    if (data.recotacao_id) {
+        const { error: vinculoError } = await supabaseAdmin
+            .from('solicitacoes_cancelamento_ordem')
+            .update({ recotacao_id: data.recotacao_id })
+            .eq('id', solicitacaoId)
+
+        if (vinculoError) {
+            throw new Error('Cancelamento aprovado, mas não foi possível vincular a recotação.')
+        }
+    }
 
     const solicitacao = data.solicitacao
     const tipoDecisao = aprovado ? 'aprovado' : 'recusado'
