@@ -189,6 +189,8 @@ async function notificarFornecedorCancelamento({
 }
 
 
+
+
 export async function decidirCancelamentoOrdem({
     solicitacaoId,
     aprovado,
@@ -215,14 +217,42 @@ export async function decidirCancelamentoOrdem({
         throw new Error(data?.message || 'A decisão não foi concluída.')
     }
 
+    const solicitacao = data.solicitacao
+    const tipoDecisao = aprovado ? 'aprovado' : 'recusado'
+    const tipoOrdem = solicitacao.ordem_fornecimento_id
+        ? 'Ordem de Fornecimento'
+        : 'Ordem de Transporte'
+    const ordemId = solicitacao.ordem_fornecimento_id
+        || solicitacao.ordem_transporte_id
+
+    const { error: notificacaoError } = await criarNotificacaoInterna({
+        destinatarioId: solicitacao.solicitado_por,
+        tipo: 'CANCELAMENTO_ORDEM_DECIDIDO',
+        titulo: `Cancelamento ${tipoDecisao}`,
+        mensagem: `A solicitação de cancelamento da ${tipoOrdem} ${ordemId} foi ${tipoDecisao}. Justificativa: ${justificativa}`,
+        ordemFornecimentoId: solicitacao.ordem_fornecimento_id,
+        dados: {
+            solicitacao_id: solicitacaoId,
+            ordem_id: ordemId,
+            tipo_ordem: tipoOrdem,
+            aprovado,
+            justificativa,
+            decidido_por: usuarioId,
+            recotacao_id: data.recotacao_id || null
+        },
+        idempotencyKey: `cancelamento:${solicitacaoId}:operador:decisao`
+    })
+
+    if (notificacaoError) {
+        console.error('Erro ao notificar operador sobre decisão:', notificacaoError)
+    }
+
     let notificacaoFornecedor = {
         enviada: false,
         erro: null
     }
 
     if (aprovado) {
-        const solicitacao = data.solicitacao
-
         try {
             notificacaoFornecedor = await notificarFornecedorCancelamento({
                 ordemFornecimentoId: solicitacao.ordem_fornecimento_id,
@@ -240,3 +270,4 @@ export async function decidirCancelamentoOrdem({
         notificacaoFornecedor
     }
 }
+
