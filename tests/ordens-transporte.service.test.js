@@ -304,30 +304,28 @@ function configurarCenarioEmissao({
         }
     ];
 
-    if (ordemExistente) {
+    const podeEmitir =
+        !ordemExistente || ordemExistente.status === 'pendente';
+
+    if (podeEmitir) {
         passos.push({
             tabela: 'ordens_transporte',
             resultado: { data: ordemEmitida, error: null }
         });
-    } else {
-        passos.push({
-            tabela: 'ordens_transporte',
-            resultado: { data: ordemEmitida, error: null }
-        });
-    }
 
-    passos.push({
-        tabela: 'ordem_transporte_vouchers',
-        resultado: erroVoucher
-            ? { data: null, error: erroVoucher }
-            : { data: voucher, error: null }
-    });
-
-    if (erroVoucher) {
         passos.push({
-            tabela: 'ordens_transporte',
-            resultado: { error: erroReversao }
+            tabela: 'ordem_transporte_vouchers',
+            resultado: erroVoucher
+                ? { data: null, error: erroVoucher }
+                : { data: voucher, error: null }
         });
+
+        if (erroVoucher) {
+            passos.push({
+                tabela: 'ordens_transporte',
+                resultado: { error: erroReversao }
+            });
+        }
     }
 
     db.from.mockImplementation((tabela) => {
@@ -345,17 +343,33 @@ function configurarCenarioEmissao({
 
         const query = {
             select: jest.fn(() => query),
+
             eq: jest.fn(() => query),
+
             insert: jest.fn((dados) => {
-                operacoes.push({ tabela, tipo: 'insert', dados });
+                operacoes.push({
+                    tabela,
+                    tipo: 'insert',
+                    dados
+                });
+
                 return query;
             }),
+
             update: jest.fn((dados) => {
-                operacoes.push({ tabela, tipo: 'update', dados });
+                operacoes.push({
+                    tabela,
+                    tipo: 'update',
+                    dados
+                });
+
                 return query;
             }),
+
             maybeSingle: jest.fn(async () => passo.resultado),
+
             single: jest.fn(async () => passo.resultado),
+
             then: (resolve, reject) =>
                 Promise.resolve(passo.resultado).then(resolve, reject)
         };
@@ -363,9 +377,12 @@ function configurarCenarioEmissao({
         return query;
     });
 
-    return { operacoes, ordemEmitida, voucher };
+    return {
+        operacoes,
+        ordemEmitida,
+        voucher
+    };
 }
-
 describe('RF_F11 - emissão da OT e voucher original', () => {
     const dadosBase = {
         cotacaoId: 'cotacao-1',
@@ -381,19 +398,98 @@ describe('RF_F11 - emissão da OT e voucher original', () => {
     });
 
     it('emite a OT e retorna o voucher original', async () => {
-        const { ordemEmitida, voucher } = configurarCenarioEmissao();
+    const { ordemEmitida, voucher, operacoes } =
+        configurarCenarioEmissao();
+
+    const resultado = await emitirOrdemDeTransporte(dadosBase);
+
+    expect(resultado.error).toBeNull();
+    expect(resultado.data.status).toBe('emitida');
+    expect(resultado.data.id).toBe(ordemEmitida.id);
+    expect(resultado.data.vouchers).toEqual([voucher]);
+
+    expect(db.from).toHaveBeenCalledWith(
+        'ordem_transporte_vouchers'
+    );
+
+    const operacoesOT = operacoes.filter(
+        (op) => op.tabela === 'ordens_transporte'
+    );
+
+    expect(operacoesOT).toHaveLength(1);
+    expect(operacoesOT[0].tipo).toBe('insert');
+});
+
+it('reaproveita a OT pendente sem criar outro registro', async () => {
+    const ordemPendente = {
+        id: 'ot-existente',
+        numero: 'OT-PENDENTE-001',
+        cotacao_id: 'cotacao-1',
+        paciente_id: 'paciente-1',
+        fornecedor_id: 'fornecedor-1',
+        status: 'pendente'
+    };
+
+    const { operacoes, voucher } = configurarCenarioEmissao({
+        ordemExistente: ordemPendente
+    });
+
+    const resultado = await emitirOrdemDeTransporte(dadosBase);
+
+    expect(resultado.error).toBeNull();
+    expect(resultado.data.id).toBe('ot-existente');
+    expect(resultado.data.numero).toBe('OT-PENDENTE-001');
+    expect(resultado.data.status).toBe('emitida');
+    expect(resultado.data.vouchers).toEqual([voucher]);
+
+    const operacoesOT = operacoes.filter(
+        (op) => op.tabela === 'ordens_transporte'
+    );
+
+    expect(operacoesOT).toHaveLength(1);
+    expect(operacoesOT[0].tipo).toBe('update');
+    expect(operacoesOT[0].dados.status).toBe('emitida');
+
+    expect(
+        operacoesOT.filter((op) => op.tipo === 'insert')
+    ).toHaveLength(0);
+});
+
+it.each(['emitida', 'cancelada'])(
+    'bloqueia nova emissão quando a OT já está %s',
+    async (status) => {
+        const ordemExistente = {
+            id: 'ot-existente',
+            numero: 'OT-EXISTENTE-001',
+            cotacao_id: 'cotacao-1',
+            paciente_id: 'paciente-1',
+            fornecedor_id: 'fornecedor-1',
+            status
+        };
+
+        const { operacoes } = configurarCenarioEmissao({
+            ordemExistente
+        });
 
         const resultado = await emitirOrdemDeTransporte(dadosBase);
 
-        expect(resultado.error).toBeNull();
-        expect(resultado.data.status).toBe('emitida');
-        expect(resultado.data.id).toBe(ordemEmitida.id);
-        expect(resultado.data.vouchers).toEqual([voucher]);
-        expect(db.from).toHaveBeenCalledWith(
-            'ordem_transporte_vouchers'
-        );
-    });
+        expect(resultado.data).toBeNull();
+        expect(resultado.error.code).toBe('OT_JA_EXISTE');
 
+        expect(
+            operacoes.filter(
+                (op) => op.tabela === 'ordens_transporte'
+                    && op.tipo === 'insert'
+            )
+        ).toHaveLength(0);
+
+        expect(
+            operacoes.filter(
+                (op) => op.tabela === 'ordem_transporte_vouchers'
+            )
+        ).toHaveLength(0);
+    }
+);
     it('cancela a OT recém-criada se falhar a gravação do voucher', async () => {
         const { operacoes } = configurarCenarioEmissao({
             erroVoucher: { message: 'Falha simulada ao gravar voucher' }

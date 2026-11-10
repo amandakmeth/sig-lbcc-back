@@ -6,7 +6,11 @@ const cotacaoBase = {
     status: 'finalizada',
     ativo: true,
     data_validade: '2026-10-30',
-    paciente_id: 'paciente-1'
+    paciente_id: 'paciente-1',
+    areas: {
+        id: 'area-1',
+        nome: 'Medicamentos'
+    }
 }
 
 const vencedores = [{
@@ -139,14 +143,40 @@ const { gerarOrdensDeFornecimento } = await import(
     '../src/modules/fornecimento/services/fornecimento.services.js'
 )
 
+
 describe('geração da ordem de fornecimento', () => {
     beforeAll(() => {
         jest.useFakeTimers()
         jest.setSystemTime(new Date('2026-10-09T15:00:00-03:00'))
     })
 
+    beforeEach(() => {
+        configurarBuilders()
+    })
+
     afterAll(() => {
         jest.useRealTimers()
+    })
+
+    it('recusa gerar OF para cotação de Transporte Urbano', async () => {
+        configurarBuilders({
+            data: {
+                ...cotacaoBase,
+                areas: {
+                    id: 'area-transporte',
+                    nome: 'Transporte urbano'
+                }
+            },
+            error: null
+        })
+
+        const resultado = await gerarOrdensDeFornecimento({
+            cotacaoId: 'cotacao-1',
+            criadoPor: 'usuario-1'
+        })
+
+        expect(resultado.error.message).toMatch(/Ordem de Transporte/i)
+        expect(ordemInsertBuilder.insert).not.toHaveBeenCalled()
     })
 
     it('cria a ordem sem prazo definido antes do envio bem-sucedido do e-mail', async () => {
@@ -163,63 +193,57 @@ describe('geração da ordem de fornecimento', () => {
         expect(resultado.data[0].data_previsao_entrega).toBeNull()
     })
 
-    beforeEach(() => {
-    configurarBuilders()
+    it('recusa gerar OF para cotação inativa', async () => {
+        configurarBuilders({
+            data: {
+                ...cotacaoBase,
+                ativo: false
+            },
+            error: null
+        })
+
+        const resultado = await gerarOrdensDeFornecimento({
+            cotacaoId: 'cotacao-1',
+            criadoPor: 'usuario-1'
+        })
+
+        expect(resultado.error.message).toMatch(/inativa/i)
+        expect(ordemInsertBuilder.insert).not.toHaveBeenCalled()
     })
 
+    it('recusa gerar OF para cotação vencida', async () => {
+        configurarBuilders({
+            data: {
+                ...cotacaoBase,
+                data_validade: '2026-10-08'
+            },
+            error: null
+        })
 
-it('recusa gerar OF para cotação inativa', async () => {
-    configurarBuilders({
-        data: {
-            ...cotacaoBase,
-            ativo: false
-        },
-        error: null
+        const resultado = await gerarOrdensDeFornecimento({
+            cotacaoId: 'cotacao-1',
+            criadoPor: 'usuario-1'
+        })
+
+        expect(resultado.error.message).toMatch(/vencida/i)
+        expect(ordemInsertBuilder.insert).not.toHaveBeenCalled()
     })
 
-    const resultado = await gerarOrdensDeFornecimento({
-        cotacaoId: 'cotacao-1',
-        criadoPor: 'usuario-1'
+    it('recusa gerar OF sem paciente associado', async () => {
+        configurarBuilders({
+            data: {
+                ...cotacaoBase,
+                paciente_id: null
+            },
+            error: null
+        })
+
+        const resultado = await gerarOrdensDeFornecimento({
+            cotacaoId: 'cotacao-1',
+            criadoPor: 'usuario-1'
+        })
+
+        expect(resultado.error.message).toMatch(/paciente/i)
+        expect(ordemInsertBuilder.insert).not.toHaveBeenCalled()
     })
-
-    expect(resultado.error.message).toMatch(/inativa/i)
-    expect(ordemInsertBuilder.insert).not.toHaveBeenCalled()
-})
-
-it('recusa gerar OF para cotação vencida', async () => {
-    configurarBuilders({
-        data: {
-            ...cotacaoBase,
-            data_validade: '2026-10-08'
-        },
-        error: null
-    })
-
-    const resultado = await gerarOrdensDeFornecimento({
-        cotacaoId: 'cotacao-1',
-        criadoPor: 'usuario-1'
-    })
-
-    expect(resultado.error.message).toMatch(/vencida/i)
-    expect(ordemInsertBuilder.insert).not.toHaveBeenCalled()
-})
-
-it('recusa gerar OF sem paciente associado', async () => {
-    configurarBuilders({
-        data: {
-            ...cotacaoBase,
-            paciente_id: null
-        },
-        error: null
-    })
-
-    const resultado = await gerarOrdensDeFornecimento({
-        cotacaoId: 'cotacao-1',
-        criadoPor: 'usuario-1'
-    })
-
-    expect(resultado.error.message).toMatch(/paciente/i)
-    expect(ordemInsertBuilder.insert).not.toHaveBeenCalled()
-})
-
 })
