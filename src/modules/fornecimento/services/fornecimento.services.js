@@ -254,12 +254,16 @@ async function registrarAlteracaoDePrazo({
 export async function gerarOrdensDeFornecimento({ cotacaoId, criadoPor }) {
   const { data: cotacao, error: cotacaoError } = await supabase
     .from("cotacoes")
-    .select(`
+      .select(`
       id,
       status,
       ativo,
       data_validade,
-      paciente_id
+      paciente_id,
+      areas:area_id (
+        id,
+        nome
+      )
     `)
     .eq("id", cotacaoId)
     .single();
@@ -273,7 +277,21 @@ export async function gerarOrdensDeFornecimento({ cotacaoId, criadoPor }) {
     };
   }
 
+  const nomeArea = cotacao.areas?.nome
+    ?.trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 
+  if (nomeArea === "transporte urbano") {
+    return {
+      data: null,
+      error: {
+        message:
+          "Cotações de Transporte Urbano devem gerar Ordem de Transporte, não Ordem de Fornecimento.",
+      },
+    };
+  }
 
   if (cotacao.status !== "finalizada") {
     return {
