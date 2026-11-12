@@ -20,7 +20,52 @@ export async function listarSolicitacoesCancelamentoDireto() {
         throw new Error('Não foi possível listar as solicitações diretas de cancelamento.')
     }
 
-    return data || []
+    const solicitacoes = data || []
+
+    const ordensFornecimentoIds = solicitacoes
+        .map(item => item.ordem_fornecimento_id)
+        .filter(Boolean)
+
+    const { data: ordens, error: ordensError } = ordensFornecimentoIds.length
+        ? await supabaseAdmin
+            .from('ordens_fornecimento')
+            .select('id, cotacao_id')
+            .in('id', ordensFornecimentoIds)
+        : { data: [], error: null }
+
+    if (ordensError) throw ordensError
+
+    const cotacaoIds = [...new Set(
+        (ordens || []).map(ordem => ordem.cotacao_id).filter(Boolean)
+    )]
+
+    const { data: cotacoes, error: cotacoesError } = cotacaoIds.length
+        ? await supabaseAdmin
+            .from('cotacoes')
+            .select('id, data_validade')
+            .in('id', cotacaoIds)
+        : { data: [], error: null }
+
+    if (cotacoesError) throw cotacoesError
+
+    const validadePorCotacao = new Map(
+        (cotacoes || []).map(cotacao => [cotacao.id, cotacao.data_validade])
+    )
+
+    const cotacaoPorOrdem = new Map(
+        (ordens || []).map(ordem => [ordem.id, ordem.cotacao_id])
+    )
+
+    return solicitacoes.map(item => {
+        const cotacaoId = cotacaoPorOrdem.get(item.ordem_fornecimento_id)
+
+        return {
+            ...item,
+            data_validade_cotacao_original: cotacaoId
+                ? validadePorCotacao.get(cotacaoId) || null
+                : null
+        }
+    })
 }
 
 export async function notificarGestoresCancelamento({
@@ -280,4 +325,4 @@ export async function decidirCancelamentoOrdem({
         notificacaoFornecedor
     }
 }
-
+listarSolicitacoesCancelamentoDireto
