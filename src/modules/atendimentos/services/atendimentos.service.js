@@ -3,9 +3,13 @@ import supabase from '../../../config/supabase.js'
 // =========================
 // LISTAR ATENDIMENTOS
 // =========================
-export const listarAtendimentos = async () => {
+export const listarAtendimentos = async ({
+    areaId,
+    dataInicio,
+    dataFim
+} = {}) => {
 
-    return await supabase
+    let query = supabase
         .from('atendimentos')
         .select(`
             *,
@@ -22,9 +26,14 @@ export const listarAtendimentos = async () => {
                 descricao
             )
         `)
-        .order('data_atendimento', {
-            ascending: false
-        })
+
+    if (areaId) query = query.eq('area_id', areaId)
+    if (dataInicio) query = query.gte('data_atendimento', dataInicio)
+    if (dataFim) query = query.lte('data_atendimento', dataFim)
+
+    return await query.order('data_atendimento', {
+        ascending: false
+    })
 }
 
 // =========================

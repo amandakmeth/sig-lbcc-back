@@ -31,9 +31,30 @@ router.use(authMiddleware)
  *     tags: [Atendimentos]
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: area_id
+ *         description: Filtra os atendimentos pela área
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: query
+ *         name: data_inicio
+ *         description: Data inicial inclusiva do período
+ *         schema:
+ *           type: string
+ *           format: date
+ *       - in: query
+ *         name: data_fim
+ *         description: Data final inclusiva do período
+ *         schema:
+ *           type: string
+ *           format: date
  *     responses:
  *       200:
  *         description: Lista de atendimentos
+ *       400:
+ *         description: Filtros inválidos
  */
 router.get('/', getAtendimentos)
 

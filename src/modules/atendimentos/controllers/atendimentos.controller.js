@@ -9,12 +9,42 @@ import {
 
 import { inserirHistorico } from '../../historico_pacientes/services/historico.service.js'
 
+const isValidDateOnly = (value) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+
+    const parsed = new Date(`${value}T00:00:00.000Z`)
+    return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value
+}
+
 // =========================
 // LISTAR ATENDIMENTOS
 // =========================
 export const getAtendimentos = async (req, res) => {
     try {
-        const { data, error } = await listarAtendimentos()
+        const { area_id, data_inicio, data_fim } = req.query
+        const parametros = [area_id, data_inicio, data_fim]
+
+        if (parametros.some((valor) => valor !== undefined && typeof valor !== 'string')) {
+            return res.status(400).json({ erro: 'Filtros inválidos' })
+        }
+
+        const areaId = typeof area_id === 'string' ? area_id.trim() : ''
+        const dataInicio = typeof data_inicio === 'string' ? data_inicio.trim() : ''
+        const dataFim = typeof data_fim === 'string' ? data_fim.trim() : ''
+
+        if ((dataInicio && !isValidDateOnly(dataInicio)) || (dataFim && !isValidDateOnly(dataFim))) {
+            return res.status(400).json({ erro: 'Período inválido. Use datas no formato AAAA-MM-DD' })
+        }
+
+        if (dataInicio && dataFim && dataInicio > dataFim) {
+            return res.status(400).json({ erro: 'A data inicial deve ser anterior ou igual à data final' })
+        }
+
+        const { data, error } = await listarAtendimentos({
+            areaId: areaId || undefined,
+            dataInicio: dataInicio || undefined,
+            dataFim: dataFim || undefined
+        })
         if (error) return res.status(500).json({ erro: error.message })
         return res.json(data)
     } catch (err) {
