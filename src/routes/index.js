@@ -19,6 +19,7 @@ import operacaoRoutes from '../modules/operacao/routes/operacao.routes.js'
 import transporteRoutes from '../modules/transporte/routes/ordensTransporte.routes.js'
 import comprovacoesRoutes from '../modules/comprovacoes/routes/comprovacoes.routes.js'
 import divergenciasRoutes from '../modules/divergencias/routes/divergencias.routes.js'
+import relatoriosRoutes from '../modules/relatorios/routes/relatorios.routes.js'
 
 const router = express.Router()
 
@@ -47,6 +48,7 @@ router.use('/operacao', operacaoRoutes);
 router.use('/transporte', transporteRoutes)
 router.use('/comprovacoes', comprovacoesRoutes)
 router.use('/divergencias', divergenciasRoutes)
+router.use('/relatorios', relatoriosRoutes)
 // Documentos (usa rotas próprias internas)
 
 router.use(pacienteDocumentosRoutes)
